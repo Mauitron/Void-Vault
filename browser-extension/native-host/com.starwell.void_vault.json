@@ -1,9 +1,9 @@
 {
   "name": "com.starwell.void_vault",
-  "description": "Void Vault Native Host - Starwell Project",
-  "path": "/home/charon/void_vault/void_vault",
+  "description": "Void Vault Native Host, Starwell Project",
+  "path": "/home/USERNAME/void_vault/void_vault",
   "type": "stdio",
   "allowed_origins": [
-    "chrome-extension://dpciolkenpgdldjbbbpndiibpjbaapec/"
+    "chrome-extension://EXTENSION_ID/"
   ]
 }
