@@ -1,4 +1,7 @@
 ![void-vault-static-crt](https://github.com/user-attachments/assets/b1d32f6d-e6e0-42c3-9b3d-3c590af04461)
+[![Windows Support](https://img.shields.io/badge/Windows-Should%20Work-yellowgreen?logo=windows&logoColor=white "Works on Windows but has limited testing")](docs/windows-support.md)
+![Linux Support](https://img.shields.io/badge/Linux-Supported-success?logo=linux&logoColor=white)
+![Status](https://img.shields.io/badge/Status-Beta-yellow)
 
 ## Zero storage. Zero trust. Zero compromise.
 
