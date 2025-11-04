@@ -1,7 +1,7 @@
 ![void-vault-static-crt](https://github.com/user-attachments/assets/b1d32f6d-e6e0-42c3-9b3d-3c590af04461)
 
-
 **Zero storage. Zero trust. Zero compromise.**
+If you like Void Vault and want to support the project, please consider feeding me some [Pizza](https://buymeacoffee.com/charon0) 🍕
 
 The Void Vault is a component of a larger project called Starwell (TBA).
 I am releasing this stripped down version as a standalone for a handfull
