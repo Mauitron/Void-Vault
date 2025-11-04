@@ -50,9 +50,10 @@ multidimensional geometry created during setup.
   it completely auditable.
 - **Ment to be yours**: No APIs or cloud service. Each user has their own
   unique geometry, locally on their device (no mass breach risk).
-  **IMPORTANT** Make sure you make a backup of the binary to a safe location.
-  there is no way to recover your passwords if you delete your binary and
-  don't have it backed up anywhere. 
+  **IMPORTANT:** After setup, immediately backup `~/void_vault/void_vault`
+  (Linux/macOS) or `%LOCALAPPDATA%\Starwell\void_vault.exe` (Windows) to a
+  safe location. There is no way to recover your passwords if you delete your
+  binary and don't have it backed up anywhere. 
 - **Browser Extension**: Real-time password generation for use in the browser.
   allowing you to toggle on Void Vault and start outputting through it.
 - **Domain-Specific Passwords**: The extension makes different passwords on
@@ -97,7 +98,7 @@ cd void-vault
 
 The installer will:
 1. Build the Rust binary (auto-detects your platform)
-2. Install to system location (`~/.local/bin`, `~/Library/...`, or `%LOCALAPPDATA%`)
+2. Install to `~/void_vault/` (Linux/macOS) or `%LOCALAPPDATA%\Starwell\` (Windows)
 3. Set up native messaging for your browser(s)
 4. Guide you through extension installation
 5. Hopefully, configure everything automatically
@@ -165,7 +166,11 @@ Edit the manifest file to:
 When you first run the binary, it will guide you through a simple 3-step setup:
 
 ```bash
-./target/release/void_vault
+~/void_vault/void_vault
+```
+Or on Windows:
+```powershell
+%LOCALAPPDATA%\Starwell\void_vault.exe
 ```
 
 **Step 1: Choose Password Style** (Can not be changed once set)
@@ -202,9 +207,10 @@ You're now ready to generate deterministic passwords!
 
 ### Binary Self-Modification
 
-When you complete the setup, Void Vault modifies its own executable file to 
-embed your unique geometry within itself. This is why:
-- Backing up the binary is so important, its backing up your vault
+When you complete the setup, Void Vault modifies the installed executable file
+at `~/void_vault/void_vault` (or `%LOCALAPPDATA%\Starwell\void_vault.exe` on
+Windows) to embed your unique geometry within itself. This is why:
+- Backing up the binary is so important - it's backing up your vault
 - The binary file grows slightly after setup
 - A .bak file is automatically created during saves to the binary
 
@@ -213,7 +219,7 @@ embed your unique geometry within itself. This is why:
 After setup, running the binary gives you a simple interface:
 
 ```bash
-./target/release/void_vault
+~/void_vault/void_vault
 ```
 
 ```
@@ -264,26 +270,26 @@ the same.
 
 #### Interactive Mode (Default)
 ```bash
-./target/release/void_vault
+~/void_vault/void_vault
 ```
 Simple prompt for entering passwords. Type input, get password.
 
 #### Terminal Demo Mode
 ```bash
-./target/release/void_vault --term
+~/void_vault/void_vault --term
 ```
 Shows character-by-character generation in real-time. Great for seeing the
 system in action! And for you to experiment / analyze the output
 
 #### I/O Mode (for scripts)
 ```bash
-echo "myinput" | ./target/release/void_vault --io
+echo "myinput" | ~/void_vault/void_vault --io
 ```
 Pipe input, get password on stdout.
 
 #### JSON I/O Mode (for native messaging)
 ```bash
-./target/release/void_vault --json-io
+~/void_vault/void_vault --json-io
 ```
 Chrome native messaging protocol (used automatically by browser extension).
 
@@ -369,7 +375,6 @@ void-vault/
 ├── install.sh              Linux/macOS installer
 ├── install.ps1             Windows PowerShell installer
 ├── install.bat             Windows batch wrapper
-├── native-host-launcher.sh Chrome native messaging launcher
 └── Cargo.toml              Rust project configuration
 ```
 
