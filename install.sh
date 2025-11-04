@@ -11,9 +11,12 @@ echo
 
 # Get the absolute path to the project directory
 PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
-BINARY_PATH="$PROJECT_DIR/target/release/starwell_password_manager"
-LAUNCHER_PATH="$PROJECT_DIR/native-host-launcher.sh"
+BUILD_BINARY_PATH="$PROJECT_DIR/target/release/void_vault"
 EXTENSION_PATH="$PROJECT_DIR/browser-extension"
+
+# Install location
+INSTALL_DIR="$HOME/void_vault"
+INSTALLED_BINARY_PATH="$INSTALL_DIR/void_vault"
 
 # Colors for output
 GREEN='\033[0;32m'
@@ -47,17 +50,19 @@ if ! command -v cargo &> /dev/null; then
 fi
 
 cargo build --release
-if [ ! -f "$BINARY_PATH" ]; then
+if [ ! -f "$BUILD_BINARY_PATH" ]; then
     echo -e "${RED}Error: Binary build failed${NC}"
     exit 1
 fi
 echo -e "${GREEN}✓ Binary built successfully${NC}"
 echo
 
-# Step 2: Ensure launcher script is executable
-echo -e "${YELLOW}[2/5] Setting up native messaging launcher...${NC}"
-chmod +x "$LAUNCHER_PATH"
-echo -e "${GREEN}✓ Launcher script ready${NC}"
+# Step 2: Install binary to system location
+echo -e "${YELLOW}[2/5] Installing binary to $INSTALL_DIR...${NC}"
+mkdir -p "$INSTALL_DIR"
+cp "$BUILD_BINARY_PATH" "$INSTALLED_BINARY_PATH"
+chmod +x "$INSTALLED_BINARY_PATH"
+echo -e "${GREEN}✓ Binary installed to: $INSTALLED_BINARY_PATH${NC}"
 echo
 
 # Step 3: Install native messaging host manifest for browsers
@@ -127,12 +132,12 @@ install_native_host() {
 
     mkdir -p "$config_dir"
 
-    # Create the manifest (without extension ID, this will be filled in after installation
+    # Create the manifest (without extension ID, this will be filled in after installation)
     cat > "$config_dir/com.starwell.void_vault.json" << EOF
 {
   "name": "com.starwell.void_vault",
   "description": "Void Vault Password Manager Native Host",
-  "path": "$LAUNCHER_PATH",
+  "path": "$INSTALLED_BINARY_PATH",
   "type": "stdio",
   "allowed_origins": [
     "chrome-extension://EXTENSION_ID_PLACEHOLDER/"
@@ -228,7 +233,7 @@ echo
 echo "1. Reload the extension in your browser (click the reload icon)"
 echo
 echo "2. Create your first password geometry:"
-echo "   $BINARY_PATH"
+echo "   $INSTALLED_BINARY_PATH"
 echo
 echo "3. Test the extension:"
 echo "   - Visit any website with a password field"
@@ -237,7 +242,7 @@ echo "   - Press Ctrl+Shift+S to activate Void Vault"
 echo "   - Type your input sequence"
 echo "   - Watch the password generate in real-time!"
 echo
-echo "Enjoy using Starwell's Void Vault Password Manager!"
+echo "Enjoy using Void Vault!"
 echo
 
 # Optional: Create desktop shortcut
@@ -250,7 +255,7 @@ if [[ "$CREATE_LAUNCHER" =~ ^[Yy]$ ]]; then
 [Desktop Entry]
 Name=Void Vault
 Comment=Deterministic password generator with geometric path traversal
-Exec=$BINARY_PATH
+Exec=$INSTALLED_BINARY_PATH
 Icon=password-generator
 Terminal=true
 Type=Application
