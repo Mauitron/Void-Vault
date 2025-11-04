@@ -1,4 +1,5 @@
-![void-vault-static-crt](https://github.com/user-attachments/assets/4116b3b7-2b20-4b33-bdb2-54b4f463b4f5)
+![void-vault-static-crt](https://github.com/user-attachments/assets/b1d32f6d-e6e0-42c3-9b3d-3c590af04461)
+
 
 **Zero storage. Zero trust. Zero compromise.**
 
