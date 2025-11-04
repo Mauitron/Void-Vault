@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <style>
+    body {
+      width: 300px;
+      padding: 16px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      margin: 0;
+    }
+
+    h1 {
+      font-size: 18px;
+      margin: 0 0 16px 0;
+      color: #333;
+    }
+
+    .status {
+      padding: 12px;
+      border-radius: 4px;
+      margin-bottom: 16px;
+    }
+
+    .status.active {
+      background: #E8F5E9;
+      color: #2E7D32;
+    }
+
+    .status.inactive {
+      background: #FAFAFA;
+      color: #666;
+    }
+
+    .info {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #666;
+      margin-bottom: 12px;
+    }
+
+    .shortcut {
+      background: #F5F5F5;
+      padding: 8px;
+      border-radius: 4px;
+      font-family: monospace;
+      font-size: 12px;
+      margin-top: 8px;
+    }
+
+    a {
+      color: #4CAF50;
+      text-decoration: none;
+    }
+
+    a:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <h1>Void Vault</h1>
+
+  <div class="status inactive" id="status">
+    <strong>Status:</strong> Inactive
+  </div>
+
+  <div class="info">
+    <p>To use Void Vault on a password field:</p>
+    <ol style="margin: 8px 0; padding-left: 20px;">
+      <li>Click on a password field</li>
+      <li>Press <strong>Ctrl+Shift+S</strong></li>
+      <li>Type your memorable phrase</li>
+      <li>Press <strong>Enter</strong> when done</li>
+    </ol>
+  </div>
+
+  <div class="shortcut">
+    <strong>Shortcuts:</strong><br>
+    Ctrl+Shift+S - Activate<br>
+    Enter - Confirm<br>
+    Esc - Cancel
+  </div>
+
+  <div class="info" style="margin-top: 16px; font-size: 11px; color: #999;">
+    <p>Your passwords are generated locally using your unique configuration. Nothing is sent to the cloud.</p>
+  </div>
+
+  <script src="scripts/popup.js"></script>
+</body>
+</html>

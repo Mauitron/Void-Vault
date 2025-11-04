@@ -1,0 +1,16 @@
+[package]
+name = "void_vault"
+version = "0.1.0"
+edition = "2021"
+authors = ["Mauritz Nyfeldt"]
+description = "Void Vault: Deterministic password generator using geometric traversal. Dual-licensed: AGPL-3.0 or Commercial (see COMMERCIAL-LICENSE.md)"
+license = "AGPL-3.0-only"
+repository = "https://github.com/YOUR_USERNAME/void-vault"
+readme = "README.md"
+keywords = ["password", "security", "password-generator", "authentication"]
+categories = ["authentication", "command-line-utilities"]
+[[bin]]
+name = "void_vault"
+path = "src/main.rs"
+
+[dependencies]
