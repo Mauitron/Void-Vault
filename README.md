@@ -1,4 +1,4 @@
-# Void Vault Password Manager
+![void-vault-static-crt](https://github.com/user-attachments/assets/4116b3b7-2b20-4b33-bdb2-54b4f463b4f5)
 
 **Zero storage. Zero trust. Zero compromise.**
 
