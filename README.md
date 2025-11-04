@@ -10,13 +10,15 @@ Firstly, one of the goals of the **Void Vault** is to make ultra secure
 passwords approachable and easy to use for people who are vulnerable.
 By turning easy to remember inputs into super secure outputs, elderly
 and memory deficient people (like me) can feel safe and protected without
-having to remember multiple passwords or changing passwords and forgetting them 
+having to remember multiple passwords, or changing passwords and forgetting them 
 
-Secondly, for you to try it out, to see if you find any vulnerablities
-or exploits that I have failed to to catch. To validate the 'unique' security
-model Void Vault provides. and to get feedback on the user experience.
+Secondly, to allow you to find any vulnerablities or exploits that I might have
+missed during development. To validate the 'unique' security model Void Vault
+provides. 
 
-The Void Vault is new solution to password management
+Thirdly, Simlpy to get feedback on the user experience and suggestions.
+
+As far as I can tell the Void Vault is new solution to password management
 that uses **geometric path traversal** to generate high-entropy passwords from
 memorable input sequences. solving password management not through encrypted
 storage and hidden secrets, but through never storing anything at all.
@@ -28,7 +30,7 @@ passwords on demand instead of storing and copying them.
           but it is very much intentional. Void Vault does not work like a
           normal password manager, and I want to be super clear on the points
           I feel are important. I find that explaining new things in multiple
-          and slightly different ways, increases the chance that people will
+          but slightly different ways increases the chance that people will
           remember and understand. 
           
 ## What makes Void Vault different?
@@ -40,7 +42,7 @@ multidimensional geometry created during setup.
 ## Features
 - **Security from Non-existence**: Just like it's namesake, when you open
   the vault, there are no passwords to be found. Nothing to steal.  
-- **Weak Input to Strong Output**: Simple inputs like "password123" produce
+- **Weak Input into Strong Output**: Simple inputs like "password123" produce
   ultra-secure passwords.
 - **Zero Dependencies**: Back-end is pure Rust standard library only. making
   it completely auditable.
