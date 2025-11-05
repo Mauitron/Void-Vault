@@ -1589,7 +1589,6 @@ impl PasswordManager {
         println!("Type your sequence naturally.");
         println!("Press ESC when finished.");
 
-        #[cfg(unix)]
         setup_raw_mode();
 
         let stdin = io::stdin();
@@ -1868,11 +1867,11 @@ fn run_simple_setup(password_manager: &mut PasswordManager, seed: u64) -> io::Re
     println!("══════════════════════════════════════════════════════════════════════");
     println!("STEP 3: Create Your Password File");
     println!("══════════════════════════════════════════════════════════════════════");
-    println!("\nType a phrase of at least 20 characters.");
+    println!("\nType a phrase of at least 40 characters.");
     println!("This phrase will help make your file unique.\n");
     println!("Instructions:");
     println!("  • Type any phrase, sentence, or random characters");
-    println!("  • At least 20 characters");
+    println!("  • At least 40 characters, longer is better");
     println!("  • This is ONLY for setup");
     println!("  • Press ESC when finished\n");
 
