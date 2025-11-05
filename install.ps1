@@ -19,16 +19,16 @@ $ExtensionPath = Join-Path $ProjectDir "browser-extension"
 
 # Colors for output (using Write-Host -ForegroundColor)
 function Write-Success { Write-Host $args[0] -ForegroundColor Green }
-function Write-Warning { Write-Host $args[0] -ForegroundColor Yellow }
-function Write-Error { Write-Host $args[0] -ForegroundColor Red }
+function Write-Warn { Write-Host $args[0] -ForegroundColor Yellow }
+function Write-Err { Write-Host $args[0] -ForegroundColor Red }
 
 Write-Host "Project directory: $ProjectDir"
 Write-Host ""
 
 # Step 1: Check for Rust/Cargo
-Write-Warning "[1/5] Checking for Rust toolchain..."
+Write-Warn "[1/5] Checking for Rust toolchain..."
 if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
-    Write-Error "Error: Rust/Cargo not found."
+    Write-Err "Error: Rust/Cargo not found."
     Write-Host "Please install Rust first from: https://rustup.rs"
     Write-Host ""
     Write-Host "Quick install:"
@@ -41,12 +41,12 @@ Write-Success "✓ Rust found"
 Write-Host ""
 
 # Step 2: Build the binary
-Write-Warning "[2/5] Building Void Vault binary..."
+Write-Warn "[2/5] Building Void Vault binary..."
 Push-Location $ProjectDir
 try {
     cargo build --release
     if (-not (Test-Path $BinaryPath)) {
-        Write-Error "Error: Binary build failed"
+        Write-Err "Error: Binary build failed"
         exit 1
     }
     Write-Success "✓ Binary built successfully"
@@ -56,7 +56,7 @@ try {
 Write-Host ""
 
 # Step 3: Install binary to user directory
-Write-Warning "[3/5] Installing binary..."
+Write-Warn "[3/5] Installing binary..."
 $InstallDir = Join-Path $env:LOCALAPPDATA "Starwell"
 $InstalledBinaryPath = Join-Path $InstallDir $BinaryName
 
@@ -69,7 +69,7 @@ Write-Success "✓ Binary installed to: $InstalledBinaryPath"
 Write-Host ""
 
 # Step 4: Detect browsers and install native messaging hosts
-Write-Warning "[4/5] Installing native messaging host..."
+Write-Warn "[4/5] Installing native messaging host..."
 
 $Browsers = @()
 $ChromePath = Join-Path $env:LOCALAPPDATA "Google\Chrome\User Data\NativeMessagingHosts"
@@ -87,7 +87,7 @@ if (Test-Path (Join-Path $env:LOCALAPPDATA "Microsoft\Edge")) {
 }
 
 if ($Browsers.Count -eq 0) {
-    Write-Error "Error: No supported browsers found"
+    Write-Err "Error: No supported browsers found"
     Write-Host "Supported: Chrome, Brave, Edge"
     exit 1
 }
@@ -119,7 +119,7 @@ function Install-NativeHost {
 }
 
 # Step 5: Browser extension installation
-Write-Warning "[5/5] Browser Extension Setup"
+Write-Warn "[5/5] Browser Extension Setup"
 Write-Host ""
 Write-Host "The browser extension needs to be installed manually:"
 Write-Host ""
@@ -144,7 +144,7 @@ Write-Host ""
 $ExtensionId = Read-Host "Paste the Extension ID here"
 
 if ([string]::IsNullOrWhiteSpace($ExtensionId)) {
-    Write-Error "Error: Extension ID cannot be empty"
+    Write-Err "Error: Extension ID cannot be empty"
     exit 1
 }
 
