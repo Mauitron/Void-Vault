@@ -86,21 +86,21 @@ Void Vault works on **Linux**, should work on **Windows**, will work on **macOS*
 
 #### Linux / macOS
 ```bash
-git clone https://github.com/YOUR_USERNAME/void-vault.git
+git clone https://github.com/Mauitron/void-vault.git
 cd void-vault
 ./install.sh
 ```
 
 #### Windows
 ```powershell
-git clone https://github.com/YOUR_USERNAME/void-vault.git
+git clone https://github.com/Mauitron/void-vault.git
 cd void-vault
 .\install.bat
 ```
 *Or double-click `install.bat` in File Explorer*
 
 The installer will:
-1. Build the Rust binary (auto-detects your platform)
+1. Build the Rust binary (should auto-detects your platform)
 2. Install to `~/void_vault/` (Linux/macOS) or `%LOCALAPPDATA%\Starwell\` (Windows)
 3. Set up native messaging for your browser(s)
 4. Guide you through extension installation
@@ -386,15 +386,18 @@ void-vault/
 ### What Void Vault Protects Against
 -  **Password database breaches** (nothing stored)
 -  **Weak master passwords** (security from geometry, not only from input)
--  **Password reuse** (different password per domain)
+-  **Password reuse** (automatically different password per domain)
 -  **Brute force attacks** (The geometric approach creates huge variation)
 -  **Pattern analysis** (path-dependent generation)
--  **Mass attacks** (each user has unique shape)
+-  **Mass attacks** (each user has a unique geomentry)
+- **Phishing** Browser extension checks domain so it does not output the 
+  same password unless the domain is the same. 
+
 
 ### What Void Vault Does NOT Protect Against
 - **Binary theft**
-  attacker with your binary could generate your output given they
-  know your input and target.
+  attacker with your binary could generate your outputs given they
+  know your inputs and targets.
 - Mitigation: Don't give your vault to someone else, and then tell them all
   your input passwords and the domains they target. 
 
@@ -404,10 +407,6 @@ void-vault/
 
 - **OS-level keyloggers** (captures your input as you type)
 - Mitigation: None yet (they would need you vault for it to be usefull though)
-
-- **Phishing (Propably)** (user enters password on fake site)
-- Mitigation: Browser extension checks domain so it should not get the 
-  password to the real website.
 
 ### Threat Model
 
@@ -420,7 +419,7 @@ void-vault/
 
 **Weaker assumptions:**
 - Your input sequences can be simple (security comes from geometry)
-- You sure at least a 8-12 char input password / phrase
+- You use at least a 8-12 char input password / phrase
 - You don't need to remember complex passwords
 
 ## Licensing
@@ -447,7 +446,7 @@ Void Vault is **dual-licensed**:
 
 **Pricing**: See [COMMERCIAL-LICENSE.md](COMMERCIAL-LICENSE.md)
 
-**Contact**: licensing@starwell.se
+**Contact**: Maui_The_Magnificent@proton.me
 
 ## Privacy
 
@@ -486,8 +485,8 @@ for example.
 ### Is the Windows version tested?
 
 The code includes full Windows support, with Console API for terminal, native
-messaging detection and such, but has not been extensively tested.
-Please report issues you might find!
+messaging detection and such, but as I am developing on Linux it has not been
+extensively tested. Please report issues you might find!
 
 ### How do I update Void Vault?
 This is a slimmed down version of the original Void Vault, it is designed to
@@ -514,7 +513,7 @@ But again, if it needs to be done, these are the condensed recommended steps:
 
 ## Disclaimer
 
-This is **beta software**. While the security principles are sound,
+This is currently **beta software**. While the security principles are sound,
 the implementation has not undergone any formal security audit.
 Use at your own risk.
 
