@@ -69,13 +69,13 @@ multidimensional geometry created during setup.
 Also unlike traditional password managers, simple inputs like "summerhouse" 
 are actually secure because:
 
-1. **Your geometry is unique**: Even "password123" through your binary 
-   produces outputs no one else can generate
+1. **Your geometry is unique**: Even if you input "123456" through your
+    binary, it produces outputs no one else can generate
 
-2. **No mass breach risk**: Attackers must target you individually, 
+3. **No mass breach risk**: Attackers must target you individually, 
    which isn't economical for random users
 
-3. **No master password**: Nothing to crack or phish
+4. **No master password**: Nothing to crack or phish
 
 
 ## Installation
