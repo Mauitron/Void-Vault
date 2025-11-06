@@ -37,7 +37,7 @@ if (-not (Get-Command cargo -ErrorAction SilentlyContinue)) {
     Write-Host "  .\rustup-init.exe"
     exit 1
 }
-Write-Success "✓ Rust found"
+Write-Success "Rust found"
 Write-Host ""
 
 # Step 2: Build the binary
@@ -49,7 +49,7 @@ try {
         Write-Err "Error: Binary build failed"
         exit 1
     }
-    Write-Success "✓ Binary built successfully"
+    Write-Success "Binary built successfully"
 } finally {
     Pop-Location
 }
@@ -65,7 +65,7 @@ if (-not (Test-Path $InstallDir)) {
 }
 
 Copy-Item $BinaryPath $InstalledBinaryPath -Force
-Write-Success "✓ Binary installed to: $InstalledBinaryPath"
+Write-Success "Binary installed to: $InstalledBinaryPath"
 Write-Host ""
 
 # Step 4: Detect browsers and install native messaging hosts
@@ -105,17 +105,20 @@ function Install-NativeHost {
 
     $ManifestFile = Join-Path $ManifestPath "com.starwell.void_vault.json"
 
+    # Convert backslashes to forward slashes (Windows accepts these and they are JSON-safe)
+    $JsonSafePath = $InstalledBinaryPath -replace '\\', '/'
+
     # Create manifest JSON
     $Manifest = @{
         name = "com.starwell.void_vault"
         description = "Void Vault Password Manager Native Host"
-        path = $InstalledBinaryPath
+        path = $JsonSafePath
         type = "stdio"
         allowed_origins = @("chrome-extension://$ExtensionId/")
     }
 
     $Manifest | ConvertTo-Json | Set-Content -Path $ManifestFile -Encoding UTF8
-    Write-Success "  ✓ Installed for $BrowserName"
+    Write-Success "  Installed for $BrowserName"
 }
 
 # Step 5: Browser extension installation
@@ -138,7 +141,7 @@ Write-Host ""
 Write-Host "5. Copy the Extension ID (looks like: abcdefghijklmnopqrstuvwxyz)"
 Write-Host ""
 
-Read-Host "Press Enter after you've copied the Extension ID"
+Read-Host "Press Enter after you have copied the Extension ID"
 Write-Host ""
 
 $ExtensionId = Read-Host "Paste the Extension ID here"
@@ -176,7 +179,7 @@ Write-Host "   - Press Ctrl+Shift+S to activate Void Vault"
 Write-Host "   - Type your input sequence"
 Write-Host "   - Watch the password generate in real-time!"
 Write-Host ""
-Write-Success "Enjoy using Void Vault Password Generator!"
+Write-Success "Enjoy using Void Vault!"
 Write-Host ""
 
 # Optional: Add to PATH
@@ -186,11 +189,11 @@ if ($AddToPath -eq 'y' -or $AddToPath -eq 'Y') {
     $CurrentPath = [Environment]::GetEnvironmentVariable("Path", "User")
     if ($CurrentPath -notlike "*$InstallDir*") {
         [Environment]::SetEnvironmentVariable("Path", "$CurrentPath;$InstallDir", "User")
-        Write-Success "✓ Added to PATH. Restart your terminal to use 'void_vault' command."
+        Write-Success "Added to PATH. Restart your terminal to use void_vault command."
     } else {
         Write-Host "Already in PATH."
     }
 }
 
 Write-Host ""
-Write-Host "Installation log: This PowerShell session"
+Write-Host "Installation complete!"
