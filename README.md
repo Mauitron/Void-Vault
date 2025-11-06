@@ -17,32 +17,38 @@ By turning easy to remember inputs into super secure outputs, elderly
 and memory deficient people (like me) can feel safe and protected without
 having to remember multiple passwords, or changing passwords and forgetting them 
 
-Secondly, to allow you to find any vulnerablities or exploits that I might have
-missed during development. To validate the 'unique' security model Void Vault
-provides. 
+Secondly, I want you to try it out. Maybe you'll find vulnerablities or exploits
+that I might have missed during development. This will help validate the 'unique'
+security model Void Vault provides. 
 
-Thirdly, Simlpy to get feedback on the user experience and suggestions.
+Thirdly, Simlpy to get feedback on the user experience, and any perspective other
+than my own.
 
 As far as I can tell the Void Vault is new solution to password management
 that uses **geometric path traversal** to generate high-entropy passwords from
-memorable input sequences. solving password management not through encrypted
-storage and hidden secrets, but through never storing anything at all.
-The Void Vault is by its very nature 2-factor, using something you have
-(your binary) and somthing you know (your inputs) to generate your ultra secure
-passwords on demand instead of storing and copying them. 
+memorable input sequences. Might sound like a bunch of fancy words but that is
+literally what it does, it moves through different geometries. 
+
+The idea is to solve password management not through encrypted storage and
+hidden secrets, but through never storing anything at all. 
+The Void Vault is very much what it sounds like, if you crack open the vault
+what you will find is not passwords, you'll find an expansive void which the
+program navigates within. 
 
 **NOTE:** There will be a fair amount of repitition, this can be annoying
           but it is very much intentional. Void Vault does not work like a
-          normal password manager, and I want to be super clear on the points
-          I feel are important. I find that explaining new things in multiple
-          but slightly different ways increases the chance that people will
-          remember and understand. 
+          normal password managers, and I want to make sure the points I 
+          feel are most important gets through. Annoying as it might be, 
+          explaining things in multiple, but slightly different, ways
+          tend to increases the chance that people will remember what
+          has been said. 
           
 ## What makes Void Vault different?
 
 Unlike traditional password managers, Void Vault does not **hide your passwords**,
-instead it generates them deterministically through navigating your own unique
-multidimensional geometry created during setup.
+instead it generates them deterministically through complex navigation of your own 
+unique multidimensional geometry. How you move depends on the keys you press,
+it basically turns your keyboard into the way you navigate the internal void.
 
 ## Features
 - **Security from Non-existence**: Just like it's namesake, when you open
@@ -59,23 +65,31 @@ multidimensional geometry created during setup.
   binary and don't have it backed up anywhere. 
 - **Browser Extension**: Real-time password generation for use in the browser.
   allowing you to toggle on Void Vault and start outputting through it.
-- **Domain-Specific Passwords**: The extension makes different passwords on
-  different websites
+- **Domain-Specific Passwords**: The extension forces passwords to be completely
+  different on different websites
 - **Deterministic Generation**: Same input + geometry = same password (always)
 - **Real-time Streaming**: Passwords generated character-by-character.
 
 ### Why Simple Inputs Work
 
-Also unlike traditional password managers, simple inputs like "summerhouse" 
-are actually secure because:
+So why does your simple input become secure? There are 3 factors at play.
+unlike traditional password managers, simple inputs like "summerhouse" are actually
+secure because:
 
 1. **Your geometry is unique**: Even if you input "123456" through your
-    binary, it produces outputs no one else can generate
+    binary, and I do the same through mine, it will produces completely
+    different outputs. 
 
-3. **No mass breach risk**: Attackers must target you individually, 
-   which isn't economical for random users
+3. **No mass breach risk**: Attackers must target you individually, because
+   even if they have your output for one website, they won't have it for another.
+   even if they have your input, they won't have your binary to produce your output. 
+   Void Vault is betting on that this makes the economics of attacking its users
+   vastly less beneficial. 
 
-4. **No master password**: Nothing to crack or phish
+5. **One of many**: Someone needs to know you use Void Vault
+   and target you specifically. This means they need to know you exist and that
+   you are worth targeting. Making you a less likely target.
+
 
 
 ## Installation
@@ -166,7 +180,9 @@ Edit the manifest file to:
 
 ### First-Time Setup
 
-When you first run the binary, it will guide you through a simple 3-step setup:
+After you have installed the program, you'll have to open the binary manually 
+once, this is so the void vault can modify itself for you specifically. 
+Once open, it will guide you through a simple 3-step setup:
 
 ```bash
 ~/void_vault/void_vault
@@ -179,7 +195,8 @@ Or on Windows:
 **Step 1: Choose Password Style** (Can not be changed once set)
 - Option 1: For shorter input passwords (1-8 characters) → Longer passwords
 - Option 2: For longer input passwords (9-16 characters) → Balanced passwords
-  NOTE: Most websites have a max allowed password length of 64-124 characters
+
+   NOTE: Most websites have a max allowed password length of 64-124 characters
         If you are to use Void Vault for general use, I recommend choosing
         option 2, as it will give you more freedom to use longer inputs
         without exceeding 64 bytes. 
@@ -217,9 +234,22 @@ Windows) to embed your unique geometry within itself. This is why:
 - The binary file grows slightly after setup
 - A .bak file is automatically created during saves to the binary
 
+On windows:
+If you get an error saying that the void vault does not have permission
+to create a backup file, this means that it did not modify its binary.
+You can test this by running the binary again, if it start the setup
+again, no modifications were made.
+
+to fix this, you would then need to run the application as admin the
+first time you run it, to allow it to modify itself.
+
+Also, if you find yourself unable to exit the installer after it has
+completed, you can safetly close the window and continue with you life.
+
 ### Interactive Password Generation
 
-After setup, running the binary gives you a simple interface:
+If everything went as planed, then after the setup, running the binary
+again will open up a simple simple interface:
 
 ```bash
 ~/void_vault/void_vault
@@ -239,9 +269,13 @@ generate a unique password:
 Generated password (N characters):
 ē₹Įő$[k₩ł∂Ʊ...
 ```
+This is not an interface you don't need to interact with if you don't want to,
+but it good to know its there if you want to experiment or analyse the
+behavior of the program.
 
-I know I am repeating myself but the fundamental security model is important to
-understand. the same input will always produce the same output.
+
+And I know I am repeating myself, but the fundamental security model is important
+to understand. the same input will always produce the same output, meaning:
 Different inputs produce completely different outputs.
 Different binaries produce a completely different output even if the input is
 the same.
@@ -264,10 +298,14 @@ the same.
 
 5. **Press Enter** to finalize (Ctrl+Shift+S again or Escape to cancel)
 
-**Important**: as mentioned above, the same input on different domains produces
+**Important**: As mentioned before, the same input on different domains produces
                different passwords:
 - "mypass" on gmail.com → `ē₹Įő$[k₩ł∂Ʊ...`
 - "mypass" on facebook.com → `₿Ψ∞≠±∑∆√∫...`
+
+if you are generating a password using the full UTC8, it will include emojis,
+and using passwords containing these are likely to cause problems on most
+websites. So for general use, please avoid this. 
 
 ### Command-Line Modes
 
@@ -314,7 +352,7 @@ Chrome native messaging protocol (used automatically by browser extension).
    - Hash-like behavior: small input changes results in completely different
      outputs
 
-### More Technical Security Properties (Repeating myself)
+### More Technical Security Properties (Repeating myself somewhat)
 
 - **Entropy Amplification**: Weak input + structure configuration +
   multiple outputs results in a much stronger final passwords
@@ -326,7 +364,7 @@ Chrome native messaging protocol (used automatically by browser extension).
 - **Zero Storage**: Passwords never stored, as the name suggest, all the vault
   stores is a void. It does not care or remember your passwords, they are only generated
   on-demand, when you need them. And are based on something you have
-  (your instance of the application), something you know (your inputs/targets)
+  (your instance of the application) and something you know (your inputs/targets)
 - **Memory Zeroing**: Sensitive data is both fragmented and transitional, it's
   cleared from memory after use
 
@@ -338,10 +376,10 @@ Chrome native messaging protocol (used automatically by browser extension).
 - Storage security (cloud/local breach risk)
 
 **Void Vault** relies on:
-- Your unique structure generated during setup
-- That you make backup(s) of your binary once setup is complete
-- Deterministic outputs based on movement through an extremely complex structure
-
+- By its nature both local and 2-factor
+- Doesn't use encryption, only generates, one way, complex outputs
+- The binary is useless without the input sequences and their targets
+   
 ### Communication Protocol
 
 Browser extension sends characters one at a time:
@@ -398,29 +436,18 @@ void-vault/
 - **Binary theft**
   attacker with your binary could generate your outputs given they
   know your inputs and targets.
+  
 - Mitigation: Don't give your vault to someone else, and then tell them all
   your input passwords and the domains they target. 
 
 - **Memory dumps**
   portions of the generated output is briefly in memory during generation
+
 - Mitigation: Memory is zeroed after activation, but brief windows exists
 
 - **OS-level keyloggers** (captures your input as you type)
+
 - Mitigation: None yet (they would need you vault for it to be usefull though)
-
-### Threat Model
-
-**Strong security assumptions:**
-- Your computer is not compromised (no malware, no keyloggers)
-- Your binary file is private (stored on a local disk + backup elsewhere)
-- You need to be targeted individually as the vault is unique to you,
-  it is not on the cloud unless you but it there yourself.
-- You use the browser extension (provides domain verification)
-
-**Weaker assumptions:**
-- Your input sequences can be simple (security comes from geometry)
-- You use at least a 8-12 char input password / phrase
-- You don't need to remember complex passwords
 
 ## Licensing
 
@@ -489,18 +516,20 @@ messaging detection and such, but as I am developing on Linux it has not been
 extensively tested. Please report issues you might find!
 
 ### How do I update Void Vault?
-This is a slimmed down version of the original Void Vault, it is designed to
-become completed. What this means for you is that updates to the actual backend
-will only happen if absolutely needed. development will always trend towards
-a state where it would never need to be updated again.
+You hopefully don't. This is a slimmed down version of the original Void Vault,
+it is designed to be/become completed. What this means for you is that updates
+to the actual backend will only happen if absolutely needed. development will
+always trend towards a state where it would never need to be updated again.
 The full version of Void Vault is part of a larger project called Starwell.
 
 With all that said, if bugs or security related problems arise and an update
-is needed, I then recommend that you reset your passwords temporarily using
-your current Void Vault, to simple normal passwords and then install the new
-version of the vault.
+is needed, I will try my best to have this update not touch the sensitive
+parts of the program. Regardless, in the event of an update,  I would then
+recommend that you reset your passwords temporarily using your current
+Void Vault, to simple normal passwords and then install the new version of 
+the vault.
 
-Updates are more likely to happen on the extension side of the application
+Updates are more likely to happen to the extension side of the application,
 which will not impact your passwords at all.
 
 But again, if it needs to be done, these are the condensed recommended steps:
