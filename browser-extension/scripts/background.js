@@ -42,9 +42,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       sendResponse({status: 'processing'});
       break;
 
-    case 'STARWELL_BACKSPACE':
-      handleBackspace(message.shiftedBuffer, sender.tab.id);
-      sendResponse({status: 'processing'});
+    case 'STARWELL_RESET':
+      console.log('[Starwell Background] Received STARWELL_RESET');
+      handleReset(sender.tab.id);
+      sendResponse({status: 'reset'});
       break;
 
     case 'STARWELL_FINALIZE':
@@ -133,24 +134,23 @@ function handleInput(character, tabId) {
   });
 }
 
-function handleBackspace(shiftedBuffer, tabId) {
+function handleReset(tabId) {
   if (!nativePort || !isStarwellActive) {
-    console.error('[Starwell Background] Cannot handle backspace - not connected');
+    console.error('[Starwell Background] Cannot handle reset - not connected');
     return;
   }
 
-  console.log('[Starwell Background] Handling backspace, replaying', shiftedBuffer.length, 'characters');
+  console.log('[Starwell Background] Resetting binary state');
 
   nativePort.postMessage({
-    type: 'INIT'
+    type: 'RESET'
   });
 
-  for (let i = 0; i < shiftedBuffer.length; i++) {
-    const char = shiftedBuffer[i];
-    nativePort.postMessage({
-      char: char
-    });
-  }
+  chrome.tabs.sendMessage(tabId, {
+    type: 'UPDATE_PASSWORD',
+    password: '',
+    normalize: false
+  });
 }
 
 function checkForPasswordShape(callback) {

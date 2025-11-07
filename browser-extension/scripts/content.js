@@ -18,8 +18,7 @@
 
 let starwellActive = false;
 let currentPasswordField = null;
-let inputBuffer = []; 
-let shiftedBuffer = [];
+let characterCount = 0;
 let currentDomain = '';
 
 document.addEventListener('focusin', (event) => {
@@ -90,8 +89,7 @@ document.addEventListener('keydown', (event) => {
 
 function activateStarwell() {
   starwellActive = true;
-  inputBuffer = [];
-  shiftedBuffer = [];
+  characterCount = 0;
   currentDomain = window.location.hostname;
   currentPasswordField.value = '';
   currentPasswordField.placeholder = 'Void Vault active, type your phrase...';
@@ -115,8 +113,7 @@ function activateStarwell() {
 
 function deactivateStarwell() {
   starwellActive = false;
-  inputBuffer = [];
-  shiftedBuffer = [];
+  characterCount = 0;
   currentPasswordField.placeholder = '';
   currentPasswordField.style.backgroundColor = '';
   currentPasswordField.style.color = '';
@@ -145,37 +142,28 @@ function handleStarwellInput(event) {
   if (event.key.length === 1 && !event.ctrlKey && !event.altKey) {
     event.preventDefault();
 
-    const inputPosition = inputBuffer.length;
-    const shiftedChar = applyDomainShift(event.key, currentDomain, inputPosition);
+    const shiftedChar = applyDomainShift(event.key, currentDomain, characterCount);
+    characterCount++;
 
-    console.log('[Starwell Content] Key pressed');
-
-    inputBuffer.push(event.key); 
-    shiftedBuffer.push(shiftedChar); 
+    console.log('[Starwell Content] Key pressed, count:', characterCount);
 
     console.log('[Starwell Content] Sending character to background');
     chrome.runtime.sendMessage({
       type: 'STARWELL_INPUT',
-      character: shiftedChar,
-      shiftedBuffer: shiftedBuffer
+      character: shiftedChar
     });
 
   } else if (event.key === 'Backspace') {
     event.preventDefault();
 
-    if (inputBuffer.length > 0) {
-      inputBuffer.pop();
-      shiftedBuffer.pop();
+    console.log('[Starwell Content] Backspace - resetting everything');
 
-      console.log('[Starwell Content] Backspace - buffer length:', inputBuffer.length);
+    characterCount = 0;
+    currentPasswordField.value = '';
 
-      currentPasswordField.value = '';
-
-      chrome.runtime.sendMessage({
-        type: 'STARWELL_BACKSPACE',
-        shiftedBuffer: shiftedBuffer
-      });
-    }
+    chrome.runtime.sendMessage({
+      type: 'STARWELL_RESET'
+    });
 
   } else if (event.key === 'Enter') {
     event.preventDefault();
