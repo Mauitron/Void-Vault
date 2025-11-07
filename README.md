@@ -1,4 +1,4 @@
-![void-vault-static-crt](https://github.com/user-attachments/assets/b1d32f6d-e6e0-42c3-9b3d-3c590af04461)
+![void-vault-static-crt](https://github.com/user-attachments/assets/36736477-1e49-43b9-b6ad-0b9b0f2f236a)`
 [![Windows Support](https://img.shields.io/badge/Windows-Should%20Work-yellowgreen?logo=windows&logoColor=white "Works on Windows but has limited testing")](docs/windows-support.md)
 ![Linux Support](https://img.shields.io/badge/Linux-Supported-success?logo=linux&logoColor=white)
 ![Status](https://img.shields.io/badge/Status-Beta-yellow)
