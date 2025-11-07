@@ -2019,29 +2019,61 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
         println!("Active configuration: {}", structure_name);
         println!("\nEnter your password phrase (or 'exit' to quit):");
 
-        let mut input = String::new();
-        io::stdin().read_line(&mut input)?;
-        let input = input.trim();
-
-        if input.is_empty() {
-            continue;
-        }
-
-        if input == "exit" {
-            break;
-        }
+        let mut stdin = io::stdin();
+        let mut exit_check = String::with_capacity(4);
+        let mut char_count = 0;
 
         if let Some(idx) = password_manager.active_structure_idx {
             if idx < password_manager.saved_passwords.len() {
                 let saved_password = &mut password_manager.saved_passwords[idx];
-                let input_sequence: Vec<char> = input.chars().collect();
-                let generated = generate_password_from_structure(saved_password, &input_sequence);
+                saved_password.structure_system.reset_position();
 
-                println!(
-                    "\nGenerated password ({} characters):",
-                    generated.chars().count()
-                );
-                println!("{}", generated);
+                println!("\nGenerated password:");
+
+                loop {
+                    let mut buffer = [0u8; 1];
+                    match stdin.read(&mut buffer) {
+                        Ok(0) => break,
+                        Ok(_) => {
+                            let byte = buffer[0];
+
+                            if byte == b'\n' || byte == b'\r' {
+                                break;
+                            }
+
+                            if let Some(ch) = char::from_u32(byte as u32) {
+                                if !ch.is_control() {
+                                    // Check for "exit" command
+                                    exit_check.push(ch);
+                                    if exit_check.len() > 4 {
+                                        exit_check.remove(0);
+                                    }
+
+                                    let keycode = ch as u32;
+                                    let output_chars = saved_password
+                                        .structure_system
+                                        .transform_char(keycode, saved_password.extra_chars_count);
+
+                                    for &code in &output_chars {
+                                        if let Some(character) = char::from_u32(code) {
+                                            print!("{}", character);
+                                            let _ = io::stdout().flush();
+                                            char_count += 1;
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        Err(e) => return Err(e),
+                    }
+                }
+
+                println!("\n({} characters)", char_count);
+                exit_check.clear();
+
+                if exit_check == "exit" {
+                    break;
+                }
             }
         }
     }
@@ -2049,55 +2081,9 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
     Ok(())
 }
 
-fn generate_password_from_structure(
-    saved_password: &mut SavedPassword,
-    input_sequence: &[char],
-) -> String {
-    let mut collected_chars = Vec::new();
-
-    saved_password.structure_system.reset_position();
-
-    for &ch in input_sequence {
-        let keycode = ch as u32;
-        let output_chars = saved_password
-            .structure_system
-            .transform_char(keycode, saved_password.extra_chars_count);
-        collected_chars.extend(output_chars.iter().filter_map(|&code| char::from_u32(code)));
-    }
-
-    collected_chars.iter().collect()
-}
-
 fn zero_memory<T>(data: &mut [T]) {
     unsafe {
         std::ptr::write_bytes(data.as_mut_ptr(), 0, data.len());
-    }
-}
-
-fn generate_password_streaming<F>(
-    saved_password: &mut SavedPassword,
-    input_sequence: &[char],
-    mut emit: F,
-) where
-    F: FnMut(char),
-{
-    saved_password.structure_system.reset_position();
-
-    for &ch in input_sequence {
-        let keycode = ch as u32;
-        let mut output_chars = saved_password
-            .structure_system
-            .transform_char(keycode, saved_password.extra_chars_count);
-
-        for i in 0..output_chars.len() {
-            let code = output_chars[i];
-            if let Some(character) = char::from_u32(code) {
-                emit(character);
-                output_chars[i] = 0;
-            }
-        }
-
-        zero_memory(&mut output_chars);
     }
 }
 
@@ -2279,10 +2265,9 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
     #[cfg(unix)]
     enable_raw_mode()?;
 
-    let mut input_chars = Vec::new();
     let mut total_output_chars = 0;
 
-    println!("Type your input (press Enter when done):");
+    println!("Type your input (press Enter when done, Backspace to reset):");
     print!("\r");
     io::stdout().flush()?;
 
@@ -2304,28 +2289,19 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                         break;
                     }
                     127 | 8 => {
-                        if !input_chars.is_empty() {
-                            input_chars.pop();
-
-                            print!("\r");
-                            for _ in 0..total_output_chars {
-                                print!(" ");
-                            }
-                            print!("\r");
-                            io::stdout().flush()?;
-
-                            let mut char_count = 0;
-                            generate_password_streaming(
-                                &mut password_manager.saved_passwords[saved_password_idx],
-                                &input_chars,
-                                |ch| {
-                                    print!("{}", ch);
-                                    let _ = io::stdout().flush();
-                                    char_count += 1;
-                                },
-                            );
-                            total_output_chars = char_count;
+                        // Backspace - reset everything
+                        print!("\r");
+                        for _ in 0..total_output_chars {
+                            print!(" ");
                         }
+                        print!("\r");
+                        io::stdout().flush()?;
+
+                        password_manager.saved_passwords[saved_password_idx]
+                            .structure_system
+                            .reset_position();
+
+                        total_output_chars = 0;
                     }
                     3 => {
                         #[cfg(unix)]
@@ -2336,20 +2312,10 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                     _ => {
                         if let Some(ch) = char::from_u32(byte as u32) {
                             if !ch.is_control() {
-                                input_chars.push(ch);
-
+                                let keycode = ch as u32;
                                 let saved_password =
                                     &mut password_manager.saved_passwords[saved_password_idx];
-                                saved_password.structure_system.reset_position();
 
-                                for i in 0..input_chars.len() - 1 {
-                                    let keycode = input_chars[i] as u32;
-                                    let _ = saved_password
-                                        .structure_system
-                                        .transform_char(keycode, saved_password.extra_chars_count);
-                                }
-
-                                let keycode = input_chars[input_chars.len() - 1] as u32;
                                 let output_chars = saved_password
                                     .structure_system
                                     .transform_char(keycode, saved_password.extra_chars_count);
@@ -2423,11 +2389,8 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
         }
     };
 
-    let stdin = io::stdin();
-    let mut input_line = String::new();
-    stdin.read_line(&mut input_line)?;
+    let mut stdin = io::stdin();
 
-    let input_chars: Vec<char> = input_line.trim().chars().collect();
     // VERY IMPORTANT
     // test sequences used for behavioral testing, in acending order, should be:
     // 1. 29213914 = zeroing trancient memory checking
@@ -2437,14 +2400,41 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     // 5. 5001019899912 = unstable folding of the geometry testing
     // 6. 64221220322204 = additive. you use this one to test treversal & consisticy
     // 7. 110883422694685420 = multiple new geometry mutation pattern testing
-    generate_password_streaming(
-        &mut password_manager.saved_passwords[saved_password_idx],
-        &input_chars,
-        |ch| {
-            print!("{}", ch);
-            let _ = io::stdout().flush();
-        },
-    );
+
+    // Read and process byte-by-byte, no storage
+    loop {
+        let mut buffer = [0u8; 1];
+        match stdin.read(&mut buffer) {
+            Ok(0) => break, // EOF
+            Ok(_) => {
+                let byte = buffer[0];
+
+                if byte == b'\n' || byte == b'\r' {
+                    break;
+                }
+
+                if let Some(ch) = char::from_u32(byte as u32) {
+                    if !ch.is_control() {
+                        let keycode = ch as u32;
+                        let saved_password =
+                            &mut password_manager.saved_passwords[saved_password_idx];
+
+                        let output_chars = saved_password
+                            .structure_system
+                            .transform_char(keycode, saved_password.extra_chars_count);
+
+                        for &code in &output_chars {
+                            if let Some(character) = char::from_u32(code) {
+                                print!("{}", character);
+                                let _ = io::stdout().flush();
+                            }
+                        }
+                    }
+                }
+            }
+            Err(e) => return Err(e),
+        }
+    }
 
     io::stdout().flush()?;
 
@@ -2524,6 +2514,17 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     .reset_position();
 
                 let response = "{\"status\":\"ready\"}";
+                let response_length = response.len() as u32;
+                stdout.write_all(&response_length.to_le_bytes())?;
+                stdout.write_all(response.as_bytes())?;
+                stdout.flush()?;
+                continue;
+            } else if message.contains("\"RESET\"") {
+                password_manager.saved_passwords[saved_password_idx]
+                    .structure_system
+                    .reset_position();
+
+                let response = "{\"status\":\"reset\"}";
                 let response_length = response.len() as u32;
                 stdout.write_all(&response_length.to_le_bytes())?;
                 stdout.write_all(response.as_bytes())?;
