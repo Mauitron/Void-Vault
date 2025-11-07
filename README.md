@@ -5,6 +5,8 @@
 
 ## Zero storage. Zero trust. Zero compromise.
 
+## Void Vault is considered as being in beta, this means during this time, updates to the binary geometry generation can occure, if you want to take part in these updates, then it's not recommended you use Void Vault as you primary password solution for the time being.
+
 ***If you like Void Vault and want to support the project, please consider feeding me some [Pizza](https://buymeacoffee.com/charon0) 🍕***
 
 The Void Vault is a component of a larger project called Starwell (TBA).
