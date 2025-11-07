@@ -517,10 +517,11 @@ extensively tested. Please report issues you might find!
 
 ### How do I update Void Vault?
 You hopefully don't. This is a slimmed down version of the original Void Vault,
-it is designed to be/become completed. What this means for you is that updates
-to the actual backend will only happen if absolutely needed. development will
-always trend towards a state where it would never need to be updated again.
-The full version of Void Vault is part of a larger project called Starwell.
+it is designed to be/become completed. What this means for you, when void vault
+exits its beta phase, is that updates to the actual backend will only happen if
+absolutely needed. development will always trend towards a state where it would
+never need to be updated again. The full version of Void Vault is part of a
+larger project called Starwell.
 
 With all that said, if bugs or security related problems arise and an update
 is needed, I will try my best to have this update not touch the sensitive
@@ -529,8 +530,8 @@ recommend that you reset your passwords temporarily using your current
 Void Vault, to simple normal passwords and then install the new version of 
 the vault.
 
-Updates are more likely to happen to the extension side of the application,
-which will not impact your passwords at all.
+At release updates are more likely to happen to the extension side of the
+application, which will not impact your passwords at all.
 
 But again, if it needs to be done, these are the condensed recommended steps:
 1. If you don't have a backup, copy the binary to a safe location
