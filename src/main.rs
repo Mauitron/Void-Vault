@@ -2046,7 +2046,11 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
                                 if !ch.is_control() {
                                     let keycode = ch as u32;
 
-                                    let mut navigation_sequence = vec![keycode];
+                                    let feedback_offset: u32 =
+                                        feedbacks.iter().map(|&fb| fb as u32).sum();
+                                    let modified_keycode = keycode.wrapping_add(feedback_offset);
+
+                                    let mut navigation_sequence = vec![modified_keycode];
                                     for &fb in feedbacks.iter().rev() {
                                         navigation_sequence.push(fb as u32);
                                     }
@@ -2087,8 +2091,6 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
             }
         }
     }
-
-    Ok(())
 }
 
 fn zero_memory<T>(data: &mut [T]) {
@@ -2322,7 +2324,12 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                                 let saved_password =
                                     &mut password_manager.saved_passwords[saved_password_idx];
 
-                                let mut navigation_sequence = vec![keycode];
+                                // Offset keycode by sum of all feedbacks
+                                let feedback_offset: u32 =
+                                    feedbacks.iter().map(|&fb| fb as u32).sum();
+                                let modified_keycode = keycode.wrapping_add(feedback_offset);
+
+                                let mut navigation_sequence = vec![modified_keycode];
                                 for &fb in feedbacks.iter().rev() {
                                     navigation_sequence.push(fb as u32);
                                 }
@@ -2454,7 +2461,11 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     for i in 0..input_chars.len() {
         let keycode = input_chars[i];
 
-        let mut navigation_sequence = vec![keycode];
+        // Offset keycode by sum of all feedbacks so far
+        let feedback_offset: u32 = feedbacks.iter().map(|&fb| fb as u32).sum();
+        let modified_keycode = keycode.wrapping_add(feedback_offset);
+
+        let mut navigation_sequence = vec![modified_keycode];
         for &fb in feedbacks.iter().rev() {
             navigation_sequence.push(fb as u32);
         }
@@ -2606,7 +2617,11 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
             let keycode = input_char as u32;
             let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
 
-            let mut navigation_sequence = vec![keycode];
+            // Offset keycode by sum of all feedbacks
+            let feedback_offset: u32 = feedbacks.iter().map(|&fb| fb as u32).sum();
+            let modified_keycode = keycode.wrapping_add(feedback_offset);
+
+            let mut navigation_sequence = vec![modified_keycode];
             for &fb in feedbacks.iter().rev() {
                 navigation_sequence.push(fb as u32);
             }
