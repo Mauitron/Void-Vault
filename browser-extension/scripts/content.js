@@ -198,21 +198,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       currentPasswordField.value = password;
     }
   }
-
-  if (message.type === 'APPEND_PASSWORD_CHARS') {
-    console.log('[Starwell Content] Appending password characters');
-    if (currentPasswordField && starwellActive) {
-      let chars = message.characters;
-
-      if (message.normalize) {
-        chars = chars.normalize('NFC');
-      }
-
-      currentPasswordField.value += chars;
-    } else {
-      console.log('[Starwell Content] Cannot append field:', currentPasswordField, 'active:', starwellActive);
-    }
-  }
 });
 
 console.log('[Void Vault] Content script loaded');

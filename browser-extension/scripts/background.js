@@ -86,8 +86,8 @@ function activateStarwell(tabId, domain) {
 
       if (message.output) {
         chrome.tabs.sendMessage(currentTabId, {
-          type: 'APPEND_PASSWORD_CHARS',
-          characters: message.output,
+          type: 'UPDATE_PASSWORD',
+          password: message.output,
           normalize: true // Apply (The peak of stupidity) NFC normalization
         });
       }
