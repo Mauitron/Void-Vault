@@ -1596,7 +1596,6 @@ impl PasswordManager {
         let mut buffer = [0; 1];
         let mut last_keypress_time = std::time::Instant::now();
 
-        // Reset Structure position before starting
         structure_system.reset_position();
 
         let mut collected_chars = Vec::new();
@@ -2020,13 +2019,11 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
         println!("\nEnter your password phrase (or 'exit' to quit):");
 
         let mut stdin = io::stdin();
-        let mut exit_check = String::with_capacity(4);
-        let mut char_count = 0;
+        let mut feedbacks: Vec<u8> = Vec::new();
 
         if let Some(idx) = password_manager.active_structure_idx {
             if idx < password_manager.saved_passwords.len() {
                 let saved_password = &mut password_manager.saved_passwords[idx];
-                saved_password.structure_system.reset_position();
 
                 println!("\nGenerated password:");
 
@@ -2041,26 +2038,43 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
                                 break;
                             }
 
+                            if byte == b'e' && feedbacks.is_empty() {
+                                // might be typing "exit", but continue processing normally
+                            }
+
                             if let Some(ch) = char::from_u32(byte as u32) {
                                 if !ch.is_control() {
-                                    // Check for "exit" command
-                                    exit_check.push(ch);
-                                    if exit_check.len() > 4 {
-                                        exit_check.remove(0);
+                                    let keycode = ch as u32;
+
+                                    let mut navigation_sequence = vec![keycode];
+                                    for &fb in feedbacks.iter().rev() {
+                                        navigation_sequence.push(fb as u32);
                                     }
 
-                                    let keycode = ch as u32;
-                                    let output_chars = saved_password
-                                        .structure_system
-                                        .transform_char(keycode, saved_password.extra_chars_count);
+                                    print!("\r                                                            \r");
+                                    let _ = io::stdout().flush();
 
-                                    for &code in &output_chars {
-                                        if let Some(character) = char::from_u32(code) {
-                                            print!("{}", character);
-                                            let _ = io::stdout().flush();
-                                            char_count += 1;
+                                    saved_password.structure_system.reset_position();
+                                    let mut output_sum = 0u64;
+
+                                    for &input_code in &navigation_sequence {
+                                        let output_chars =
+                                            saved_password.structure_system.transform_char(
+                                                input_code,
+                                                saved_password.extra_chars_count,
+                                            );
+
+                                        for &code in &output_chars {
+                                            if let Some(character) = char::from_u32(code) {
+                                                print!("{}", character);
+                                                let _ = io::stdout().flush();
+                                                output_sum = output_sum.wrapping_add(code as u64);
+                                            }
                                         }
                                     }
+
+                                    let feedback = (output_sum % 256) as u8;
+                                    feedbacks.push(feedback);
                                 }
                             }
                         }
@@ -2068,12 +2082,8 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
                     }
                 }
 
-                println!("\n({} characters)", char_count);
-                exit_check.clear();
-
-                if exit_check == "exit" {
-                    break;
-                }
+                println!();
+                feedbacks.clear();
             }
         }
     }
@@ -2265,7 +2275,7 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
     #[cfg(unix)]
     enable_raw_mode()?;
 
-    let mut total_output_chars = 0;
+    let mut feedbacks: Vec<u8> = Vec::new();
 
     println!("Type your input (press Enter when done, Backspace to reset):");
     print!("\r");
@@ -2289,19 +2299,15 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                         break;
                     }
                     127 | 8 => {
-                        // Backspace - reset everything
-                        print!("\r");
-                        for _ in 0..total_output_chars {
-                            print!(" ");
-                        }
-                        print!("\r");
+                        // Backspace, reset everything
+                        feedbacks.clear();
+
+                        print!("\r                                                            \r");
                         io::stdout().flush()?;
 
                         password_manager.saved_passwords[saved_password_idx]
                             .structure_system
                             .reset_position();
-
-                        total_output_chars = 0;
                     }
                     3 => {
                         #[cfg(unix)]
@@ -2316,17 +2322,35 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                                 let saved_password =
                                     &mut password_manager.saved_passwords[saved_password_idx];
 
-                                let output_chars = saved_password
-                                    .structure_system
-                                    .transform_char(keycode, saved_password.extra_chars_count);
+                                let mut navigation_sequence = vec![keycode];
+                                for &fb in feedbacks.iter().rev() {
+                                    navigation_sequence.push(fb as u32);
+                                }
 
-                                for &code in &output_chars {
-                                    if let Some(character) = char::from_u32(code) {
-                                        print!("{}", character);
-                                        io::stdout().flush()?;
-                                        total_output_chars += 1;
+                                print!("\r                                                            \r");
+                                io::stdout().flush()?;
+
+                                saved_password.structure_system.reset_position();
+
+                                let mut output_sum = 0u64;
+                                for &input_code in &navigation_sequence {
+                                    let output_chars =
+                                        saved_password.structure_system.transform_char(
+                                            input_code,
+                                            saved_password.extra_chars_count,
+                                        );
+
+                                    for &code in &output_chars {
+                                        if let Some(character) = char::from_u32(code) {
+                                            print!("{}", character);
+                                            io::stdout().flush()?;
+                                            output_sum = output_sum.wrapping_add(code as u64);
+                                        }
                                     }
                                 }
+
+                                let feedback = (output_sum % 256) as u8;
+                                feedbacks.push(feedback);
                             }
                         }
                     }
@@ -2390,6 +2414,8 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     };
 
     let mut stdin = io::stdin();
+    let mut feedbacks: Vec<u8> = Vec::new();
+    let mut input_chars: Vec<u32> = Vec::new();
 
     // VERY IMPORTANT
     // test sequences used for behavioral testing, in acending order, should be:
@@ -2401,7 +2427,7 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     // 6. 64221220322204 = additive. you use this one to test treversal & consisticy
     // 7. 110883422694685420 = multiple new geometry mutation pattern testing
 
-    // Read and process byte-by-byte, no storage
+    // Read all input bytes first
     loop {
         let mut buffer = [0u8; 1];
         match stdin.read(&mut buffer) {
@@ -2415,26 +2441,49 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
 
                 if let Some(ch) = char::from_u32(byte as u32) {
                     if !ch.is_control() {
-                        let keycode = ch as u32;
-                        let saved_password =
-                            &mut password_manager.saved_passwords[saved_password_idx];
-
-                        let output_chars = saved_password
-                            .structure_system
-                            .transform_char(keycode, saved_password.extra_chars_count);
-
-                        for &code in &output_chars {
-                            if let Some(character) = char::from_u32(code) {
-                                print!("{}", character);
-                                let _ = io::stdout().flush();
-                            }
-                        }
+                        input_chars.push(ch as u32);
                     }
                 }
             }
             Err(e) => return Err(e),
         }
     }
+
+    let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
+
+    for i in 0..input_chars.len() {
+        let keycode = input_chars[i];
+
+        let mut navigation_sequence = vec![keycode];
+        for &fb in feedbacks.iter().rev() {
+            navigation_sequence.push(fb as u32);
+        }
+
+        saved_password.structure_system.reset_position();
+        let mut output_sum = 0u64;
+
+        for &input_code in &navigation_sequence {
+            let output_chars = saved_password
+                .structure_system
+                .transform_char(input_code, saved_password.extra_chars_count);
+
+            for &code in &output_chars {
+                output_sum = output_sum.wrapping_add(code as u64);
+
+                if i == input_chars.len() - 1 {
+                    if let Some(character) = char::from_u32(code) {
+                        print!("{}", character);
+                    }
+                }
+            }
+        }
+
+        let feedback = (output_sum % 256) as u8;
+        feedbacks.push(feedback);
+    }
+
+    zero_memory(&mut input_chars);
+    zero_memory(&mut feedbacks);
 
     io::stdout().flush()?;
 
@@ -2488,6 +2537,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
 
     let mut stdin = io::stdin();
     let mut stdout = io::stdout();
+    let mut feedbacks: Vec<u8> = Vec::new();
 
     loop {
         let mut length_bytes = [0u8; 4];
@@ -2513,6 +2563,8 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     .structure_system
                     .reset_position();
 
+                feedbacks.clear();
+
                 let response = "{\"status\":\"ready\"}";
                 let response_length = response.len() as u32;
                 stdout.write_all(&response_length.to_le_bytes())?;
@@ -2524,6 +2576,8 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     .structure_system
                     .reset_position();
 
+                feedbacks.clear();
+
                 let response = "{\"status\":\"reset\"}";
                 let response_length = response.len() as u32;
                 stdout.write_all(&response_length.to_le_bytes())?;
@@ -2531,6 +2585,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 stdout.flush()?;
                 continue;
             } else if message.contains("\"FINALIZE\"") {
+                feedbacks.clear();
                 break;
             }
         }
@@ -2550,9 +2605,29 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
         if let Some(input_char) = char_value {
             let keycode = input_char as u32;
             let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
-            let output_codes = saved_password
-                .structure_system
-                .transform_char(keycode, saved_password.extra_chars_count);
+
+            let mut navigation_sequence = vec![keycode];
+            for &fb in feedbacks.iter().rev() {
+                navigation_sequence.push(fb as u32);
+            }
+
+            saved_password.structure_system.reset_position();
+            let mut output_sum = 0u64;
+            let mut output_codes = Vec::new();
+
+            for &input_code in &navigation_sequence {
+                let codes = saved_password
+                    .structure_system
+                    .transform_char(input_code, saved_password.extra_chars_count);
+
+                for &code in &codes {
+                    output_sum = output_sum.wrapping_add(code as u64);
+                    output_codes.push(code);
+                }
+            }
+
+            let feedback = (output_sum % 256) as u8;
+            feedbacks.push(feedback);
 
             let output_chars: String = output_codes
                 .iter()
