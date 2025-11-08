@@ -54,9 +54,15 @@ it basically turns your keyboard into the way you navigate the internal void.
 
 ## Features
 - **Security from Non-existence**: Just like it's namesake, when you open
-  the vault, there are no passwords to be found. Nothing to steal.  
+  the vault, there are no passwords to be found. Nothing to steal.
+- **Realtime input substitution**: Outputs secure high entropy outputs on
+  each keypress in real time.  
 - **Weak Input into Strong Output**: Simple inputs like "password123" produce
   ultra-secure passwords.
+- **Bidirectional temporal dependency**: future keypresses depends on what
+  came before them. Previous keypresses change depending on what comes after
+  them. This mean "123" outputs a completely different sequence of characters
+  than "1234".
 - **Zero Dependencies**: Back-end is pure Rust standard library only. making
   it completely auditable.
 - **Ment to be yours**: No APIs or cloud service. Each user has their own
