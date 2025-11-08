@@ -251,7 +251,7 @@ completed, you can safetly close the window and continue with you life.
 ### Interactive Password Generation
 
 If everything went as planed, then after the setup, running the binary
-again will open up a simple simple interface:
+again will open up a simpl interactive interface:
 
 ```bash
 ~/void_vault/void_vault
@@ -271,10 +271,9 @@ generate a unique password:
 Generated password (N characters):
 ē₹Įő$[k₩ł∂Ʊ...
 ```
-This is not an interface you don't need to interact with if you don't want to,
-but it good to know its there if you want to experiment or analyse the
-behavior of the program.
-
+This is not an interface you need to use, it serves no purpose other than
+allowing you to test it out. Might help you get a better understanding of
+the programs behavior. 
 
 And I know I am repeating myself, but the fundamental security model is important
 to understand. the same input will always produce the same output, meaning:
