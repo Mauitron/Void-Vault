@@ -4,48 +4,69 @@
   <meta charset="UTF-8">
   <style>
     body {
-      width: 300px;
-      padding: 16px;
+      width: 400px;
+      padding: 0;
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       margin: 0;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      max-height: 600px;
+      overflow-y: auto;
     }
 
     h1 {
       font-size: 18px;
       margin: 0 0 16px 0;
-      color: #333;
+      color: #e0e0e0;
+    }
+
+    .view-container {
+      padding: 20px;
     }
 
     .status {
       padding: 12px;
-      border-radius: 4px;
+      border-radius: 8px;
       margin-bottom: 16px;
+      border: 1px solid;
     }
 
     .status.active {
-      background: #E8F5E9;
-      color: #2E7D32;
+      background: rgba(76, 175, 80, 0.1);
+      border-color: #4CAF50;
+      color: #4CAF50;
     }
 
     .status.inactive {
-      background: #FAFAFA;
-      color: #666;
+      background: rgba(128, 128, 128, 0.1);
+      border-color: #555;
+      color: #999;
     }
 
     .info {
       font-size: 13px;
       line-height: 1.6;
-      color: #666;
+      color: #b0b0b0;
       margin-bottom: 12px;
     }
 
+    .info ol {
+      color: #d0d0d0;
+    }
+
     .shortcut {
-      background: #F5F5F5;
-      padding: 8px;
-      border-radius: 4px;
-      font-family: monospace;
+      background: #2a2a2a;
+      padding: 12px;
+      border-radius: 8px;
+      font-family: 'Consolas', 'Monaco', monospace;
       font-size: 12px;
       margin-top: 8px;
+      border: 1px solid #333;
+      color: #b0b0b0;
+    }
+
+    .shortcut strong {
+      color: #e0e0e0;
     }
 
     a {
@@ -56,34 +77,312 @@
     a:hover {
       text-decoration: underline;
     }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 12px;
+      background: linear-gradient(135deg, #4CAF50 0%, #45a049 100%);
+      color: white;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      cursor: pointer;
+      font-weight: 500;
+      transition: all 0.2s;
+      box-shadow: 0 2px 8px rgba(76, 175, 80, 0.3);
+    }
+
+    button:hover {
+      background: linear-gradient(135deg, #45a049 0%, #3d8b40 100%);
+      box-shadow: 0 4px 12px rgba(76, 175, 80, 0.4);
+      transform: translateY(-1px);
+    }
+
+    button:active {
+      transform: translateY(0);
+    }
+
+    button.secondary {
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      box-shadow: none;
+    }
+
+    button.secondary:hover {
+      background: #333;
+      border-color: #555;
+      box-shadow: none;
+    }
+
+    button.danger {
+      background: linear-gradient(135deg, #f44336 0%, #e53935 100%);
+      box-shadow: 0 2px 8px rgba(244, 67, 54, 0.3);
+    }
+
+    button.danger:hover {
+      background: linear-gradient(135deg, #e53935 0%, #d32f2f 100%);
+      box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+    }
+
+    .current-domain {
+      background: rgba(33, 150, 243, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 13px;
+      border: 1px solid rgba(33, 150, 243, 0.3);
+      color: #64b5f6;
+    }
+
+    .current-domain strong {
+      color: #2196F3;
+    }
+
+    .status-message {
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      font-size: 12px;
+      border: 1px solid;
+    }
+
+    .info-box {
+      font-size: 12px;
+      background: rgba(255, 193, 7, 0.1);
+      padding: 10px;
+      border-radius: 8px;
+      margin-bottom: 12px;
+      line-height: 1.4;
+      border: 1px solid rgba(255, 193, 7, 0.3);
+      color: #ffb74d;
+    }
+
+    .info-box strong {
+      color: #ffa726;
+    }
+
+    input[type="checkbox"] {
+      cursor: pointer;
+      width: 16px;
+      height: 16px;
+      margin-right: 8px;
+      accent-color: #4CAF50;
+    }
+
+    input[type="number"] {
+      background: #2a2a2a;
+      color: #e0e0e0;
+      border: 1px solid #444;
+      padding: 6px 8px;
+      border-radius: 6px;
+      font-size: 13px;
+    }
+
+    input[type="number"]:focus {
+      outline: none;
+      border-color: #4CAF50;
+      box-shadow: 0 0 0 2px rgba(76, 175, 80, 0.2);
+    }
+
+    label {
+      cursor: pointer;
+      user-select: none;
+    }
+
+    .section-header {
+      font-weight: 600;
+      margin-bottom: 8px;
+      font-size: 13px;
+      color: #b0b0b0;
+      border-bottom: 1px solid #333;
+      padding-bottom: 6px;
+      margin-top: 16px;
+    }
+
+    .section-header:first-of-type {
+      margin-top: 0;
+    }
+
+    .header-bar {
+      display: flex;
+      align-items: center;
+      margin-bottom: 16px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid #333;
+    }
+
+    .back-button {
+      width: auto !important;
+      padding: 8px 12px !important;
+      margin: 0 !important;
+      margin-right: 12px !important;
+      background: #2a2a2a !important;
+      color: #e0e0e0 !important;
+      font-size: 13px !important;
+      border: 1px solid #444 !important;
+      box-shadow: none !important;
+    }
+
+    .back-button:hover {
+      background: #333 !important;
+      transform: none !important;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+      padding-top: 16px;
+      border-top: 1px solid #333;
+    }
+
+    .button-row button {
+      flex: 1;
+      font-size: 13px;
+      padding: 10px;
+      margin: 0;
+    }
   </style>
 </head>
 <body>
-  <h1>Void Vault</h1>
+  <div id="mainView" class="view-container">
+    <h1>Void Vault</h1>
 
-  <div class="status inactive" id="status">
-    <strong>Status:</strong> Inactive
+    <div class="status inactive" id="status">
+      <strong>Status:</strong> Inactive
+    </div>
+
+    <div class="info">
+      <p>To use Void Vault on a password field:</p>
+      <ol style="margin: 8px 0; padding-left: 20px;">
+        <li>Click on a password field</li>
+        <li>Press <strong>Ctrl+Shift+S</strong></li>
+        <li>Type your memorable phrase</li>
+        <li>Press <strong>Enter</strong> when done</li>
+      </ol>
+    </div>
+
+    <div class="shortcut">
+      <strong>Shortcuts:</strong><br>
+      Ctrl+Shift+S - Activate<br>
+      Enter - Confirm<br>
+      Esc - Cancel
+    </div>
+
+    <button id="settingsButton">⚙ Website Password Rules</button>
+
+    <div class="info" style="margin-top: 16px; font-size: 11px; opacity: 0.7;">
+      <p>Your passwords are generated locally using your unique configuration. Nothing is sent to the cloud.</p>
+    </div>
   </div>
 
-  <div class="info">
-    <p>To use Void Vault on a password field:</p>
-    <ol style="margin: 8px 0; padding-left: 20px;">
-      <li>Click on a password field</li>
-      <li>Press <strong>Ctrl+Shift+S</strong></li>
-      <li>Type your memorable phrase</li>
-      <li>Press <strong>Enter</strong> when done</li>
-    </ol>
-  </div>
+  <div id="settingsView" class="view-container" style="display: none;">
+    <div class="header-bar">
+      <button id="backButton" class="back-button">← Back</button>
+      <h1 style="margin: 0; font-size: 16px;">Password Rules</h1>
+    </div>
 
-  <div class="shortcut">
-    <strong>Shortcuts:</strong><br>
-    Ctrl+Shift+S - Activate<br>
-    Enter - Confirm<br>
-    Esc - Cancel
-  </div>
+    <div class="current-domain">
+      <strong>Domain:</strong> <span id="domainName">Loading...</span>
+    </div>
 
-  <div class="info" style="margin-top: 16px; font-size: 11px; color: #999;">
-    <p>Your passwords are generated locally using your unique configuration. Nothing is sent to the cloud.</p>
+    <div class="status-message" id="statusMessage" style="display: none;"></div>
+
+    <div class="info-box">
+      <strong>Note:</strong> Void Vault generates full UTF-8 passwords. These settings filter unwanted characters and limit length. Green border = meets requirements, Red border = under minimum.
+    </div>
+
+    <div style="margin-bottom: 12px;">
+      <label style="display: flex; align-items: center; font-size: 13px;">
+        <input type="checkbox" id="enableRules">
+        Enable custom rules for this website
+      </label>
+    </div>
+
+    <div id="rulesForm" style="display: none;">
+      <div class="section-header">Length Requirements</div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 12px; color: #999; display: block; margin-bottom: 4px;">
+          Minimum Length
+        </label>
+        <input type="number" id="minLength" min="1" max="128" placeholder="No minimum" style="width: 80px;">
+        <div style="font-size: 10px; color: #777; margin-top: 4px; font-style: italic;">
+          Visual only - shows red border if under
+        </div>
+      </div>
+
+      <div style="margin-bottom: 12px;">
+        <label style="font-size: 12px; color: #999; display: block; margin-bottom: 4px;">
+          Maximum Length
+        </label>
+        <input type="number" id="maxLength" min="1" max="128" placeholder="No maximum" style="width: 80px;">
+        <div style="font-size: 10px; color: #777; margin-top: 4px; font-style: italic;">
+          Password will be truncated to this length
+        </div>
+      </div>
+
+      <div class="section-header">Allowed Characters</div>
+
+      <div style="font-size: 11px; color: #999; margin-bottom: 8px; font-style: italic;">
+        Disallowed characters will be collapsed to allowed ones
+      </div>
+
+      <div style="display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap;">
+        <button type="button" id="presetAll" style="flex: 1; min-width: 80px; padding: 6px; margin: 0; font-size: 11px; background: #2a2a2a !important; border: 1px solid #444 !important; box-shadow: none !important;">All</button>
+        <button type="button" id="presetBasic" style="flex: 1; min-width: 80px; padding: 6px; margin: 0; font-size: 11px; background: #2a2a2a !important; border: 1px solid #444 !important; box-shadow: none !important;">Basic Only</button>
+        <button type="button" id="presetNoSymbols" style="flex: 1; min-width: 80px; padding: 6px; margin: 0; font-size: 11px; background: #2a2a2a !important; border: 1px solid #444 !important; box-shadow: none !important;">No Symbols</button>
+      </div>
+
+      <div style="font-size: 12px;">
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 500;">Basic ASCII (most compatible)</div>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowLowercase" checked>
+            Lowercase letters (a-z)
+          </label>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowUppercase" checked>
+            Uppercase letters (A-Z)
+          </label>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowDigits" checked>
+            Digits (0-9)
+          </label>
+        </div>
+
+        <div style="margin-bottom: 12px;">
+          <div style="font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 500;">Symbols</div>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowBasicSymbols" checked>
+            Basic symbols (!@#$%^&*)
+          </label>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowExtendedSymbols" checked>
+            Extended symbols (()_+-=[]{}|;:,.<>?...)
+          </label>
+        </div>
+
+        <div>
+          <div style="font-size: 11px; color: #888; margin-bottom: 6px; font-weight: 500;">Unicode (rarely supported)</div>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowEmojis" checked>
+            Emojis (😊🔒🎉...)
+          </label>
+          <label style="display: flex; align-items: center; margin-bottom: 6px;">
+            <input type="checkbox" id="allowExtendedUnicode" checked>
+            Extended Unicode (中文, αβγ, Ω...)
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <div class="button-row">
+      <button id="saveButton">💾 Save & Close</button>
+      <button class="danger" id="deleteButton">🗑 Delete</button>
+    </div>
   </div>
 
   <script src="scripts/popup.js"></script>
