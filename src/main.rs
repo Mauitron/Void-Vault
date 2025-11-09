@@ -679,7 +679,7 @@ struct StructureSystem {
     base_step_size: f64,
     step_variance: f64,
 
-    accumulated_path_memory: u64,
+    accumulated_path_memory: u8,
 }
 
 impl StructureSystem {
@@ -701,6 +701,10 @@ impl StructureSystem {
     }
 
     fn reset_position(&mut self) {
+        self.accumulated_path_memory = 0;
+    }
+
+    fn full_reset(&mut self) {
         self.current_position = ContinuousPosition::new(self.dimensions);
         self.accumulated_path_memory = 0;
     }
@@ -784,7 +788,7 @@ impl StructureSystem {
             .map(|&coord| coord as i64)
             .sum();
 
-        self.accumulated_path_memory = self.accumulated_path_memory.wrapping_add(coord_sum as u64);
+        self.accumulated_path_memory = self.accumulated_path_memory.wrapping_add(coord_sum as u8);
     }
 
     fn generate_output_from_path(
@@ -1037,18 +1041,8 @@ impl StructureSystem {
             (3.0, 2.0)
         };
 
-        let accumulated_path_memory = if bytes.len() >= offset + 8 {
-            let path_memory = u64::from_ne_bytes([
-                bytes[offset],
-                bytes[offset + 1],
-                bytes[offset + 2],
-                bytes[offset + 3],
-                bytes[offset + 4],
-                bytes[offset + 5],
-                bytes[offset + 6],
-                bytes[offset + 7],
-            ]);
-            path_memory
+        let accumulated_path_memory = if bytes.len() >= offset + 1 {
+            bytes[offset]
         } else {
             0
         };
@@ -1675,6 +1669,8 @@ impl PasswordManager {
 
         structure_system.set_name(name.to_string());
 
+        structure_system.full_reset();
+
         let created_date = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .expect("You a time traveler? Time went backwards")
@@ -1787,92 +1783,31 @@ fn run_simple_setup(password_manager: &mut PasswordManager, seed: u64) -> io::Re
     println!("The Void Vault creates secure passwords for all your accounts.");
     println!("Setup takes about 1 minute.\n");
 
-    println!("══════════════════════════════════════════════════════════════════════");
-    println!("STEP 1: Choose Your Password Style");
-    println!("══════════════════════════════════════════════════════════════════════");
-    println!("\nHow many characters do you like to type when logging in?\n");
-    println!("  [1] Shorter: Type 1-8 characters");
-    println!("      (Note: websites ususally have a password limit of 64 characters)\n");
-    println!("  [2] Longer: Type 9-16 characters");
-    println!("      (Note: websites ususally have a password limit of 64 characters)\n");
+    // 8 output characters per input
+    let extra_chars_count = 7;
 
-    print!("Choose [1 or 2]: ");
-    io::stdout().flush()?;
-
-    let mut choice = String::new();
-    io::stdin().read_line(&mut choice)?;
-    let extra_chars_count = match choice.trim() {
-        "1" => 7,
-        "2" => 3,
-        _ => {
-            println!("Using option 1 (shorter input)");
-            7
-        }
-    };
-
-    println!("\n✓ Settings saved\n");
+    // The full UTF-8 character set
+    let mut keycodes = Vec::new();
+    keycodes.extend(32..127); // ASCII printable
+    keycodes.extend(161..1024); // Extended Latin, Greek, Cyrillic, etc.
+    keycodes.extend(1024..5000); // CJK, Arabic, Hebrew, etc.
+    keycodes.extend(8192..8500); // Various symbols
+    keycodes.extend(9000..9500); // More symbols
+    keycodes.extend(128512..128591); // Emoji
 
     println!("══════════════════════════════════════════════════════════════════════");
-    println!("STEP 2: Choose Password Characters");
-    println!("══════════════════════════════════════════════════════════════════════");
-    println!("\nWhat type of characters should your passwords use?\n");
-    println!("  [1] Standard (Recommended)");
-    println!("      Letters, numbers, symbols. (works everywhere)");
-    println!("      ~95 different characters\n");
-    println!("  [2] Extended");
-    println!("      Includes language characters (should work most places)");
-    println!("      ~356 different characters\n");
-    println!("  [3] Full");
-    println!("      Maximum security with special symbols (likely unsupported on most websites)");
-    println!("      ~5,800 different characters\n");
-
-    print!("Choose [1, 2, or 3]: ");
-    io::stdout().flush()?;
-
-    let mut char_choice = String::new();
-    io::stdin().read_line(&mut char_choice)?;
-
-    let keycodes = match char_choice.trim() {
-        "2" => {
-            println!("\n✓ Using Extended character set");
-            let mut codes = (32..127).collect::<Vec<u32>>();
-            codes.extend(161..383);
-            codes.extend(913..930); // greek letters
-            codes.extend(945..962); // more Greek
-            codes.extend(8364..8365); // euro sign
-            codes.extend(8216..8218); // smart quotes
-            codes.extend(8220..8222); // more quotes
-            codes
-        }
-        "3" => {
-            println!("\n✓ Using Full character set");
-            let mut codes = Vec::new();
-            codes.extend(32..127);
-            codes.extend(161..1024);
-            codes.extend(1024..5000);
-            codes.extend(8192..8500);
-            codes.extend(9000..9500);
-            codes.extend(128512..128591);
-            codes
-        }
-        _ => {
-            println!("\n✓ Using Standard character set (recommended)");
-            (32..127).collect::<Vec<u32>>()
-        }
-    };
-
-    println!();
-
-    println!("══════════════════════════════════════════════════════════════════════");
-    println!("STEP 3: Create Your Password File");
+    println!("Create Your Void Vault");
     println!("══════════════════════════════════════════════════════════════════════");
     println!("\nType a phrase of at least 40 characters.");
-    println!("This phrase will help make your file unique.\n");
+    println!("This phrase will create your unique vault.\n");
     println!("Instructions:");
     println!("  • Type any phrase, sentence, or random characters");
-    println!("  • At least 40 characters, longer is better");
-    println!("  • This is ONLY for setup");
+    println!("  • At least 40 characters recommended (longer = better)");
+    println!("  • Type naturally - your rhythm adds uniqueness");
+    println!("  • This phrase is ONLY for setup, not for generating passwords");
     println!("  • Press ESC when finished\n");
+    println!("Note: Your passwords will use the full UTF-8 character set.");
+    println!("      The browser extension will handle website requirements.\n");
 
     println!("Press Enter to begin...");
     let mut ready = String::new();
@@ -2088,6 +2023,8 @@ fn run_interactive_mode(password_manager: &mut PasswordManager) -> io::Result<()
 
                 println!();
                 feedbacks.clear();
+
+                saved_password.structure_system.full_reset();
             }
         }
     }
@@ -2289,7 +2226,6 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
 
         match stdin.read(&mut buffer) {
             Ok(0) => {
-                // No data available, continue
                 std::thread::sleep(std::time::Duration::from_millis(10));
                 continue;
             }
@@ -2301,7 +2237,6 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                         break;
                     }
                     127 | 8 => {
-                        // Backspace, reset everything
                         feedbacks.clear();
 
                         print!("\r                                                            \r");
@@ -2309,7 +2244,7 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
 
                         password_manager.saved_passwords[saved_password_idx]
                             .structure_system
-                            .reset_position();
+                            .full_reset();
                     }
                     3 => {
                         #[cfg(unix)]
@@ -2324,7 +2259,7 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                                 let saved_password =
                                     &mut password_manager.saved_passwords[saved_password_idx];
 
-                                // Offset keycode by sum of all feedbacks
+                                // Ofset keycode by sum of all feedbacks
                                 let feedback_offset: u32 =
                                     feedbacks.iter().map(|&fb| fb as u32).sum();
                                 let modified_keycode = keycode.wrapping_add(feedback_offset);
@@ -2334,7 +2269,7 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                                     navigation_sequence.push(fb as u32);
                                 }
 
-                                print!("\r                                                            \r");
+                                print!("\x1B[50A\r\x1B[0J");
                                 io::stdout().flush()?;
 
                                 saved_password.structure_system.reset_position();
@@ -2434,11 +2369,10 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     // 6. 64221220322204 = additive. you use this one to test treversal & consisticy
     // 7. 110883422694685420 = multiple new geometry mutation pattern testing
 
-    // Read all input bytes first
     loop {
         let mut buffer = [0u8; 1];
         match stdin.read(&mut buffer) {
-            Ok(0) => break, // EOF
+            Ok(0) => break,
             Ok(_) => {
                 let byte = buffer[0];
 
@@ -2572,7 +2506,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
             if message.contains("\"INIT\"") {
                 password_manager.saved_passwords[saved_password_idx]
                     .structure_system
-                    .reset_position();
+                    .full_reset();
 
                 feedbacks.clear();
 
@@ -2585,7 +2519,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
             } else if message.contains("\"RESET\"") {
                 password_manager.saved_passwords[saved_password_idx]
                     .structure_system
-                    .reset_position();
+                    .full_reset();
 
                 feedbacks.clear();
 
