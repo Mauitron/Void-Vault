@@ -76,7 +76,7 @@ it basically turns your keyboard into the way you navigate the internal void.
 - **Domain-Specific Passwords**: The extension forces passwords to be completely
   different on different websites
 - **Deterministic Generation**: Same input + geometry = same password (always)
-- **Real-time Streaming**: Passwords generated character-by-character.
+
 
 ### Why Simple Inputs Work
 
@@ -94,9 +94,6 @@ secure because:
    Void Vault is betting on that this makes the economics of attacking its users
    vastly less beneficial. 
 
-5. **One of many**: Someone needs to know you use Void Vault
-   and target you specifically. This means they need to know you exist and that
-   you are worth targeting. Making you a less likely target.
 
 
 
