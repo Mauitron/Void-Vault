@@ -360,7 +360,7 @@ Chrome native messaging protocol (used automatically by browser extension).
 
 - **Entropy Amplification**: Weak input + structure configuration +
   multiple outputs results in a much stronger final passwords
-- **Path Dependency**: Character N depends on ALL previous characters (hash-like)
+- **Path Dependency**: Character N depends on ALL previous and future characters (hash-like)
 - **No Reversibility**: Cannot derive input from output (one-way function)
 - **Behavioral Uniqueness**: Your instance of Void Vault is unique to you!
 - **Domain Separation**: Same input produces different passwords per website
