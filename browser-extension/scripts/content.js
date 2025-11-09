@@ -22,31 +22,38 @@ let characterCount = 0;
 let currentDomain = '';
 
 document.addEventListener('focusin', (event) => {
-  if (event.target.type === 'password') {
+  // Check if it's a password field (type="password" or type="text" with password-related attributes)
+  const isPasswordField = event.target.type === 'password' ||
+                          (event.target.type === 'text' &&
+                           (event.target.autocomplete === 'current-password' ||
+                            event.target.autocomplete === 'new-password' ||
+                            event.target.name?.toLowerCase().includes('pass') ||
+                            event.target.id?.toLowerCase().includes('pass')));
+
+  if (isPasswordField) {
     currentPasswordField = event.target;
 
-    event.target.style.borderColor = '#4CAF50';
-    event.target.style.borderWidth = '2px';
-
-    showStarwellHint(event.target);
+    if (!starwellActive) {
+      event.target.style.borderColor = '#4CAF50';
+      event.target.style.borderWidth = '2px';
+      showStarwellHint(event.target);
+    }
   }
 });
 
 document.addEventListener('focusout', (event) => {
-  if (event.target.type === 'password') {
+  // Don't deactivate on focus loss - user might be switching windows
+  // Only deactivate on explicit actions (Escape key or Enter key)
+  if (event.target === currentPasswordField && !starwellActive) {
     event.target.style.borderColor = '';
     event.target.style.borderWidth = '';
-
-    if (starwellActive) {
-      deactivateStarwell();
-    }
   }
 });
 
 function showStarwellHint(field) {
   const hint = document.createElement('div');
   hint.id = 'starwell-hint';
-  hint.textContent = 'Press Ctrl+Shift+S to activate Void Vault';
+  hint.textContent = 'Press Ctrl+Shift+S to activate Void Vault (Esc to cancel)';
   hint.style.cssText = `
     position: absolute;
     background: #4CAF50;
@@ -72,22 +79,47 @@ function showStarwellHint(field) {
 // Ctrl+Shift+S to toggle (activate/deactivate)
 document.addEventListener('keydown', (event) => {
   if (event.ctrlKey && event.shiftKey && event.key === 'S') {
-    if (currentPasswordField) {
-      event.preventDefault();
-      if (starwellActive) {
-        deactivateStarwell();
-      } else {
+    event.preventDefault();
+
+    // If Void Vault is already active, deactivate it
+    if (starwellActive) {
+      deactivateStarwell();
+      return;
+    }
+
+    // If a password field is already focused, activate on it
+    if (currentPasswordField && document.activeElement === currentPasswordField) {
+      activateStarwell();
+      return;
+    }
+
+    // Otherwise, find and focus a password field automatically
+    const passwordFields = document.querySelectorAll('input[type="password"], input[autocomplete="current-password"], input[autocomplete="new-password"]');
+
+    if (passwordFields.length > 0) {
+      // Focus the first password field found
+      const field = passwordFields[0];
+      currentPasswordField = field;
+      field.focus();
+
+      // Give it a moment to focus, then activate
+      setTimeout(() => {
         activateStarwell();
-      }
+      }, 50);
+    } else {
+      console.log('[Starwell] No password field found on page');
     }
   }
 
-  if (starwellActive && currentPasswordField === document.activeElement) {
+  // Only handle input if Void Vault is active and the current field is focused
+  if (starwellActive && currentPasswordField && document.activeElement === currentPasswordField) {
     handleStarwellInput(event);
   }
 });
 
 function activateStarwell() {
+  if (!currentPasswordField) return;
+
   starwellActive = true;
   characterCount = 0;
   currentDomain = window.location.hostname;
@@ -95,6 +127,8 @@ function activateStarwell() {
   currentPasswordField.placeholder = 'Void Vault active, type your phrase...';
   currentPasswordField.style.backgroundColor = '#2c2c2c';
   currentPasswordField.style.color = '#ffffff';
+  currentPasswordField.style.borderColor = '#4CAF50';
+  currentPasswordField.style.borderWidth = '2px';
 
   console.log('[Starwell Content] Sending ACTIVATE_STARWELL message');
   chrome.runtime.sendMessage({
@@ -114,9 +148,14 @@ function activateStarwell() {
 function deactivateStarwell() {
   starwellActive = false;
   characterCount = 0;
-  currentPasswordField.placeholder = '';
-  currentPasswordField.style.backgroundColor = '';
-  currentPasswordField.style.color = '';
+
+  if (currentPasswordField) {
+    currentPasswordField.placeholder = '';
+    currentPasswordField.style.backgroundColor = '';
+    currentPasswordField.style.color = '';
+    currentPasswordField.style.borderColor = '';
+    currentPasswordField.style.borderWidth = '';
+  }
 
   chrome.runtime.sendMessage({ type: 'DEACTIVATE_STARWELL' });
 
@@ -182,7 +221,7 @@ function handleStarwellInput(event) {
   }
 }
 
-chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
   console.log('[Starwell Content] Received message type:', message.type);
 
   if (message.type === 'UPDATE_PASSWORD') {
@@ -194,8 +233,55 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         password = password.normalize('NFC');
       }
 
-      console.log('[Starwell Content] Setting password value');
-      currentPasswordField.value = password;
+      // Look up rules for THIS domain from storage
+      chrome.storage.local.get(['domainRules'], (result) => {
+        const allRules = result.domainRules || {};
+        const domainRules = allRules[currentDomain] || null;
+
+        console.log('[Starwell Content] Looking up rules for domain:', currentDomain);
+        console.log('[Starwell Content] Rules found:', domainRules ? 'yes' : 'no');
+
+        // Apply domain-specific normalization if rules exist
+        if (domainRules && domainRules.enabled) {
+          password = normalizePassword(password, domainRules);
+          console.log('[Starwell Content] Applied normalization rules');
+        }
+
+        console.log('[Starwell Content] Setting password value');
+        currentPasswordField.value = password;
+
+        // Visual feedback for minimum length (count actual characters, not code units)
+        const passwordLength = Array.from(password).length;
+
+        // Always update border color based on current state
+        if (domainRules && domainRules.minLength) {
+          if (passwordLength < domainRules.minLength) {
+            // Password is under minimum - show red border
+            console.log('[Starwell Content] Password too short:', passwordLength, '/', domainRules.minLength);
+            currentPasswordField.style.borderColor = '#f44336';
+            currentPasswordField.style.borderWidth = '2px';
+          } else {
+            // Password meets minimum - show green border
+            console.log('[Starwell Content] Password meets minimum:', passwordLength, '>=', domainRules.minLength);
+            currentPasswordField.style.borderColor = '#4CAF50';
+            currentPasswordField.style.borderWidth = '2px';
+          }
+        } else {
+          // No minimum set - show green border
+          currentPasswordField.style.borderColor = '#4CAF50';
+          currentPasswordField.style.borderWidth = '2px';
+        }
+      });
+    }
+  } else if (message.type === 'RULES_UPDATED') {
+    // Rules were updated - trigger reset if Void Vault is active
+    console.log('[Starwell Content] Rules updated for domain:', message.domain);
+    if (message.domain === currentDomain && starwellActive && currentPasswordField) {
+      console.log('[Starwell Content] Void Vault active - resetting to apply new rules');
+      // Clear the field so user can retype with new rules
+      currentPasswordField.value = '';
+      // Send reset to background to clear state
+      chrome.runtime.sendMessage({ type: 'STARWELL_RESET' });
     }
   }
 });
