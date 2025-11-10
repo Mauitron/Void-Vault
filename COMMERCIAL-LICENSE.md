@@ -104,6 +104,21 @@ terms for growing businesses.
 Development and testing do not require a commercial license, only production
 deployment in commercial products.
 
+Q: What if I only want to use Void Vault internally (not distribute it)?
+A: Internal use depends on how you deploy Void Vault:
+
+Standalone desktop use (each employee runs it locally): AGPL-3.0 allows this
+without requiring a commercial license, even for companies over $100K.
+You don't need to provide source code to employees unless you've modified the software.
+Network/web-based deployment (employees access via browser/network): Under AGPL Section 13,
+you must offer the complete source code (including any modifications) to all users who
+interact with it over the network. If you're comfortable doing this with your employees,
+AGPL-3.0 is sufficient.
+
+Want to avoid Section 13 obligations: Purchase an "Internal Use" commercial license,
+which removes the requirement to provide source code to your employees for network-based
+deployments.
+
 ### Q: What if I only want to use Void Vault internally (not distribute it)?
 
 **A:** Internal use by companies over $100K revenue is permitted under AGPL-3.0
