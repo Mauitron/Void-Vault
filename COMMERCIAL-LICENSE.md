@@ -175,4 +175,10 @@ Website: https://github.com/Mauitron/void-vault
 *This commercial license offering does not affect the rights granted under
 the AGPL-3.0 license. The AGPL-3.0 version remains freely available.*
 
-*Last updated: 2025-11-04*
+## Terms and Conditions
+
+THE SOFTWARE IS PROVIDED "AS-IS" WITHOUT WARRANTY OF ANY KIND.
+IN NO EVENT SHALL THE LICENSOR BE LIABLE FOR ANY DAMAGES ARISING 
+FROM THE USE OF THIS SOFTWARE.
+
+*Last updated: 2025-11-10*
