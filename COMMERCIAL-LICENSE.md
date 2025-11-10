@@ -53,6 +53,11 @@ A commercial license allows you to:
 - Medium businesses ($1M-$10M): $7,500-$25,000 annual
 - Large enterprises ($10M+): $25,000-$100,000+ annual
 
+### Custom Order
+*Specialized modification of Void Vault functionality to fit your needs*
+
+- Contact for pricing
+
 ### SaaS/Service Provider
 *Offering Void Vault as part of a hosted service*
 
