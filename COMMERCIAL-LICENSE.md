@@ -53,17 +53,27 @@ A commercial license allows you to:
 - Medium businesses ($1M-$10M): $7,500-$25,000 annual
 - Large enterprises ($10M+): $25,000-$100,000+ annual
 
-### Custom Order
-*Specialized modification of Void Vault functionality to fit your needs*
-
-- Contact for pricing
-
 ### SaaS/Service Provider
 *Offering Void Vault as part of a hosted service*
 
 - Revenue share model: 2-5% of revenue attributable to Void Vault features
 - Minimum annual: $5,000
 - Or flat annual rate: $10,000-$50,000 depending on scale
+
+## Professional Services
+
+*Available as add-ons to commercial licenses*
+
+We offer professional services to help you get the most out of Void Vault:
+
+- **Custom feature development** - Specialized functionality tailored to your needs
+- **Integration assistance** - Help connecting Void Vault with your existing systems
+- **Migration support** - Migrate from other password managers to Void Vault
+- **Training and implementation** - On-site or remote training for your team
+- **Security consulting** - Best practices for deployment and configuration
+- **Priority support** - Expedited response times and direct access to developers
+
+Contact us to discuss your requirements and pricing.
 
 ## How to Purchase
 
