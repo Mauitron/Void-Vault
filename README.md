@@ -5,7 +5,22 @@
 
 ## Zero storage. Zero trust. Zero compromise.
 
-## Void Vault is considered as being in beta, this means during this time, updates to the binary geometry generation can occure, if you want to take part in these updates, then it's not recommended you use Void Vault as you primary password solution for the time being.
+## Addressing common assumptions
+1. No, "7 dimensional", "Path", "Bidirectional teemporal dependency" are not metaphors or marketing gibberish
+   Void Vault **IS** a spatial, input bidirectional solution to deterministic password generation that uses
+   continuous movement through 7 spatial dimensions. Your binary typically grows by 1.5-2 MB.
+   this that geometry.
+2. No, Void Vault **IS NOT** using a "master password", it is a deterministic input substitution function.
+   If you press the letter 'S' on you your keyboard, deterministic gibberish comes out in real time.   
+3. Void Vault does not use a simple LCG for cryptography, it is used for setting up the blank default geometry
+   and as a tool during navigation.
+4. No, I am not claiming Void Vault is a more, or less, secure solution than the alternatives. What I claim,
+   I claim based on its functionality, not the robustness of its implementation. External vetting and analysis
+   is needed before such claims could be made in good faith. HOWEVER, the creation of your Void Vault is not
+   influensed by your passwords at all, therefore, there is no way to extract your passwords from the vault
+   itself. 
+
+### Void Vault is considered as being in beta, this means during this time, updates to the binary geometry generation can occure, if you want to take part in these updates, then it's not recommended you use Void Vault as you primary password solution for the time being.
 
 ***If you like Void Vault and want to support the project, please consider feeding me some [Pizza](https://buymeacoffee.com/charon0) 🍕***
 
