@@ -1,7 +1,6 @@
 # Commercial License for Void Vault Password Manager
 
 ## Overview
-
 Void Vault is dual-licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**
 for open source use and under this **Commercial License** for proprietary use.
 
@@ -120,8 +119,8 @@ for a license.
 ### Q: What happens if I use Void Vault commercially without a license?
 
 **A:** Unauthorized commercial use violates copyright law and the AGPL-3.0 terms.
-We take enforcement seriously and will pursue legal action if necessary.
-It's much simpler and more affordable to purchase a proper license.
+We reserve the right to enforce our license terms. Please contact us to ensure proper licensing,
+we're happy to work with you.
 
 ### Q: Can I get a refund if the commercial license doesn't work for me?
 
