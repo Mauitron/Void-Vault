@@ -62,20 +62,7 @@ impl BinaryStorageManager {
     // markers are unless reserved, in the zone at the end.
     // they are also based only on executable properties that won't change
     fn generate_markers(&self) -> (Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>, Vec<u8>) {
-        // and use only the executable path and name as the seed
-        let path_str = self.executable_path.to_string_lossy();
-        let filename = self
-            .executable_path
-            .file_name()
-            .unwrap_or_default()
-            .to_string_lossy();
-
-        // use aand create a stable hash from the path and filename
-        let mut hasher = std::collections::hash_map::DefaultHasher::new();
-        path_str.hash(&mut hasher);
-        filename.hash(&mut hasher);
-        let seed = hasher.finish();
-
+        // and now we read the binary header to generate portable markers
         let mut header_bytes = Vec::new();
         if let Ok(mut file) = File::open(&self.executable_path) {
             let mut buffer = [0u8; 1024];
@@ -84,15 +71,14 @@ impl BinaryStorageManager {
             }
         }
 
+        // use only the binary header hash for the marker seed
         let header_seed = {
             let mut header_hasher = std::collections::hash_map::DefaultHasher::new();
             header_bytes.hash(&mut header_hasher);
             header_hasher.finish()
         };
 
-        let combined_seed = seed ^ header_seed;
-
-        let mut rng_state = combined_seed;
+        let mut rng_state = header_seed;
 
         let generate_marker = |prefix: &[u8], length: usize, rng: &mut u64| -> Vec<u8> {
             let mut marker = Vec::with_capacity(prefix.len() + length + 1);
