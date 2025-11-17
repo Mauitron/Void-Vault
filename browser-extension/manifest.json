@@ -19,7 +19,11 @@
       ],
       "js": [
         "scripts/normalizer.js",
+        "scripts/domain-shift.js",
         "scripts/content.js"
+      ],
+      "css": [
+        "styles.css"
       ],
       "run_at": "document_idle"
     }
