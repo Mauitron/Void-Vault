@@ -1,0 +1,122 @@
+/* Void Vault Extension - Global Styles */
+/* Copyright (C) 2025 Starwell Project */
+
+/* Animations */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes fadeOut {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes slideInRight {
+  from {
+    opacity: 0;
+    transform: translateX(100px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.7;
+  }
+}
+
+/* Overlay base styles */
+.vv-overlay {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', sans-serif;
+  box-sizing: border-box;
+}
+
+.vv-overlay * {
+  box-sizing: border-box;
+}
+
+/* Button hover effects */
+.vv-overlay button:hover {
+  filter: brightness(1.15);
+  transform: translateY(-1px);
+  transition: all 0.2s ease;
+}
+
+.vv-overlay button:active {
+  transform: translateY(0);
+  filter: brightness(0.95);
+}
+
+/* Activation popup button hover effects */
+.vv-quick-btn {
+  transition: filter 0.2s ease, transform 0.2s ease !important;
+}
+
+.vv-quick-btn:hover {
+  filter: brightness(1.15) !important;
+  transform: translateY(-1px) !important;
+}
+
+.vv-quick-btn:active {
+  transform: translateY(0) !important;
+  filter: brightness(0.95) !important;
+}
+
+/* Scrollbar styling for version list */
+.vv-overlay ::-webkit-scrollbar {
+  width: 8px;
+}
+
+.vv-overlay ::-webkit-scrollbar-track {
+  background: rgba(0, 0, 0, 0.2);
+  border-radius: 4px;
+}
+
+.vv-overlay ::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 4px;
+}
+
+.vv-overlay ::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.5);
+}
+
+/* Input focus styles */
+.vv-overlay input[type="number"]:focus {
+  outline: none;
+  border-color: #7c3aed;
+  box-shadow: 0 0 0 2px rgba(124, 58, 237, 0.3);
+}
+
+/* Radio button styling */
+.vv-overlay input[type="radio"] {
+  cursor: pointer;
+  accent-color: #7c3aed;
+}
+
+/* Confirmation dialog backdrop blur */
+#vv-confirm-dialog {
+  backdrop-filter: blur(4px);
+}
+
+/* Notification styles */
+.vv-notification {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+}
