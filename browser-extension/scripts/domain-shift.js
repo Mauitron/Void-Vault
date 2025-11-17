@@ -14,7 +14,7 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //
-// Alternative commercial licensing: licensing@starwell.se
+// Alternative commercial licensing: Maui_The_Magnificent@proton.me
 
 /**
  * Apply domain-specific shifting to an input character

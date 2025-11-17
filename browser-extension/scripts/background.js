@@ -14,42 +14,37 @@
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
 //
-// Alternative commercial licensing: licensing@starwell.se
+// Alternative commercial licensing: Maui_The_Magnificent@proton.me
 
-let nativePort = null;
-let currentTabId = null;
-let isStarwellActive = false;
+
+const tabStates = new Map();
 let hasCheckedSetup = false;
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
-  console.log('[Starwell Background] Message received:', message.type); 
 
   switch (message.type) {
     case 'ACTIVATE_STARWELL':
-      console.log('[Starwell Background] Received ACTIVATE_STARWELL');
       activateStarwell(sender.tab.id, message.domain);
       sendResponse({status: 'activated'});
       break;
 
     case 'DEACTIVATE_STARWELL':
-      deactivateStarwell();
+      deactivateStarwell(sender.tab.id);
       sendResponse({status: 'deactivated'});
       break;
 
     case 'STARWELL_INPUT':
-      console.log('[Starwell Background] Received STARWELL_INPUT');
       handleInput(message.character, sender.tab.id);
       sendResponse({status: 'processing'});
       break;
 
     case 'STARWELL_RESET':
-      console.log('[Starwell Background] Received STARWELL_RESET');
       handleReset(sender.tab.id);
       sendResponse({status: 'reset'});
       break;
 
     case 'STARWELL_FINALIZE':
-      deactivateStarwell();
+      deactivateStarwell(sender.tab.id);
       sendResponse({status: 'finalized'});
       break;
 
@@ -66,83 +61,202 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       // TODO: Implement backup creation
       sendResponse({success: false, error: 'Manual backup required'});
       break;
+
+    case 'ACTIVATE_PREVIEW':
+      const tabStatePreview = tabStates.get(sender.tab.id);
+      if (tabStatePreview && tabStatePreview.nativePort && tabStatePreview.isActive) {
+        tabStatePreview.nativePort.postMessage({
+          type: 'ACTIVATE_PREVIEW',
+          domain: message.domain
+        });
+        sendResponse({status: 'preview_activated'});
+      } else {
+        sendResponse({status: 'error', error: 'Not active'});
+      }
+      break;
+
+    case 'COMMIT_INCREMENT':
+      const tabStateCommit = tabStates.get(sender.tab.id);
+      if (tabStateCommit && tabStateCommit.nativePort && tabStateCommit.isActive) {
+        tabStateCommit.nativePort.postMessage({
+          type: 'COMMIT_INCREMENT',
+          domain: message.domain
+        });
+        sendResponse({status: 'committed'});
+      } else {
+        sendResponse({status: 'error', error: 'Not active'});
+      }
+      break;
+
+    case 'CANCEL_PREVIEW':
+      const tabStateCancel = tabStates.get(sender.tab.id);
+      if (tabStateCancel && tabStateCancel.nativePort && tabStateCancel.isActive) {
+        tabStateCancel.nativePort.postMessage({
+          type: 'CANCEL_PREVIEW'
+        });
+        sendResponse({status: 'cancelled'});
+      } else {
+        sendResponse({status: 'error', error: 'Not active'});
+      }
+      break;
+
+    case 'SET_COUNTER':
+      const tabStateSet = tabStates.get(sender.tab.id);
+      if (tabStateSet && tabStateSet.nativePort && tabStateSet.isActive) {
+        tabStateSet.nativePort.postMessage({
+          type: 'SET_COUNTER',
+          domain: message.domain,
+          counter: message.counter
+        });
+        sendResponse({status: 'counter_set'});
+      } else {
+        sendResponse({status: 'error', error: 'Not active'});
+      }
+      break;
+
+    case 'GET_COUNTER':
+      const tabStateGet = tabStates.get(sender.tab.id);
+      if (tabStateGet && tabStateGet.nativePort && tabStateGet.isActive) {
+        tabStateGet.nativePort.postMessage({
+          type: 'GET_COUNTER',
+          domain: message.domain
+        });
+        sendResponse({status: 'requested'});
+      } else {
+        sendResponse({status: 'error', error: 'Not active'});
+      }
+      break;
+
+    case 'OPEN_SETTINGS':
+      chrome.action.openPopup();
+      sendResponse({status: 'opened'});
+      break;
   }
-  return true; 
+  return true;
 });
 
 function activateStarwell(tabId, domain) {
-  currentTabId = tabId;
-  isStarwellActive = true;
-
-  console.log('[Starwell Background] Activating for domain:', domain);
+  const existingState = tabStates.get(tabId);
+  if (existingState && existingState.nativePort) {
+    existingState.nativePort.disconnect();
+  }
 
   try {
-    console.log('[Starwell Background] Attempting to connect to native host...');
-    nativePort = chrome.runtime.connectNative('com.starwell.void_vault');
-    console.log('[Starwell Background] Native port connected:', nativePort);
+    console.log('[Starwell Background] Tab', tabId, 'activating for domain:', domain);
+    const nativePort = chrome.runtime.connectNative('com.starwell.void_vault');
+    console.log('[Starwell Background] Native port connected for tab:', tabId);
+
+    tabStates.set(tabId, {
+      nativePort: nativePort,
+      isActive: true,
+      domain: domain
+    });
+
+    const thisTabId = tabId;
 
     nativePort.onMessage.addListener((message) => {
-      console.log('[Starwell Background] Received output from binary');
+      console.log('[Starwell Background] Tab', thisTabId, 'received message from binary:', message);
+
+      if (message.status === 'ready' && message.saved_counter !== undefined) {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'COUNTER_UPDATED',
+          savedCounter: message.saved_counter,
+          activeCounter: message.active_counter,
+          isPreviewMode: false
+        });
+      }
+
+      if (message.status === 'preview' && message.saved_counter !== undefined) {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'COUNTER_UPDATED',
+          savedCounter: message.saved_counter,
+          activeCounter: message.active_counter,
+          isPreviewMode: true
+        });
+      }
+
+      if (message.status === 'committed') {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'COUNTER_COMMITTED',
+          counter: message.counter
+        });
+      }
+
+      if (message.status === 'cancelled') {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'PREVIEW_CANCELLED',
+          counter: message.counter
+        });
+      }
+
+      if (message.status === 'success') {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'COUNTER_SET_SUCCESS'
+        });
+      }
+
+      if (message.counter !== undefined && message.status !== 'ready' && message.status !== 'preview' && message.status !== 'cancelled' && message.status !== 'committed') {
+        chrome.tabs.sendMessage(thisTabId, {
+          type: 'COUNTER_RETRIEVED',
+          counter: message.counter
+        });
+      }
 
       if (message.output) {
-        chrome.tabs.sendMessage(currentTabId, {
+        chrome.tabs.sendMessage(thisTabId, {
           type: 'UPDATE_PASSWORD',
           password: message.output,
-          normalize: true // Apply (The peak of stupidity) NFC normalization
+          normalize: true
         });
       }
     });
 
     nativePort.onDisconnect.addListener(() => {
-      console.log('[Starwell Background] Native port disconnected');
-      nativePort = null;
-      isStarwellActive = false;
+      console.log('[Starwell Background] Tab', thisTabId, 'native port disconnected');
+      tabStates.delete(thisTabId);
     });
 
     nativePort.postMessage({
-      type: 'INIT'
+      type: 'ACTIVATE',
+      domain: domain
     });
 
   } catch (error) {
-    console.error('[Starwell Background] Failed to connect to native binary:', error);
-    isStarwellActive = false;
+    console.error('[Starwell Background] Tab', tabId, 'failed to connect to native binary:', error);
+    tabStates.delete(tabId);
   }
 }
 
-function deactivateStarwell() {
-  if (nativePort) {
-    nativePort.postMessage({ type: 'FINALIZE' });
-    nativePort.disconnect();
-    nativePort = null;
+function deactivateStarwell(tabId) {
+  const tabState = tabStates.get(tabId);
+  if (tabState && tabState.nativePort) {
+    tabState.nativePort.postMessage({ type: 'FINALIZE' });
+    tabState.nativePort.disconnect();
+    tabStates.delete(tabId);
+    console.log('[Starwell Background] Tab', tabId, 'deactivated');
   }
-
-  isStarwellActive = false;
-  currentTabId = null;
-
-  console.log('[Starwell Background] Deactivated');
 }
 
 function handleInput(character, tabId) {
-  if (!nativePort || !isStarwellActive) {
-    console.error('[Starwell Background] Not connected to binary - port:', nativePort, 'active:', isStarwellActive);
+  const tabState = tabStates.get(tabId);
+  if (!tabState || !tabState.nativePort || !tabState.isActive) {
+    console.error('[Starwell Background] Tab', tabId, 'not connected to binary');
     return;
   }
 
-  console.log('[Starwell Background] Sending character to binary');
-  nativePort.postMessage({
-    char: character
+  const charCode = character.charCodeAt(0);
+  tabState.nativePort.postMessage({
+    charCode: charCode
   });
 }
 
 function handleReset(tabId) {
-  if (!nativePort || !isStarwellActive) {
-    console.error('[Starwell Background] Cannot handle reset - not connected');
+  const tabState = tabStates.get(tabId);
+  if (!tabState || !tabState.nativePort || !tabState.isActive) {
     return;
   }
 
-  console.log('[Starwell Background] Resetting binary state');
-
-  nativePort.postMessage({
+  tabState.nativePort.postMessage({
     type: 'RESET'
   });
 
@@ -196,7 +310,7 @@ function checkForPasswordShape(callback) {
     }, 2000);
 
   } catch (error) {
-    console.error('[Starwell Background] Error checking shape:', error);
+    console.error('[Starwell Background] Error checking geometry:', error);
     invokeCallback({ hasShape: false, error: error.message });
   }
 }
@@ -205,7 +319,6 @@ let setupCheckInProgress = false;
 
 function checkAndOpenSetup() {
   if (setupCheckInProgress) {
-    console.log('[Starwell Background] Setup check already in progress, skipping...');
     return;
   }
 
@@ -213,7 +326,6 @@ function checkAndOpenSetup() {
 
   chrome.storage.local.get(['setupComplete'], (result) => {
     if (result.setupComplete) {
-      console.log('[Starwell Background] Setup already completed');
       setupCheckInProgress = false;
       return;
     }
