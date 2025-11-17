@@ -6,7 +6,7 @@
 ## Zero storage. Zero trust. Zero compromise.
 
 ## Addressing common assumptions
-1. No, "7 dimensional", "Path", "Bidirectional temporal dependency" are not metaphors or marketing gibberish.
+1. No, "7 dimensional", "Path", "Bidirectional path dependency" are not metaphors or marketing gibberish.
    Void Vault **IS** a spatial, input bidirectional dependent, solution to deterministic password generation
    that uses continuous movement through 7 spatial dimensions. Your binary typically grows by 1.5-2 MB.
    this is that geometry.
