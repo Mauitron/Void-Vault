@@ -189,6 +189,11 @@ impl BinaryStorageManager {
         new_file.write_all(&buffer)?;
         new_file.write_all(&section_marker)?;
 
+        // Also append domain table marker + empty table during initial setup
+        new_file.write_all(DOMAIN_TABLE_START_MARKER)?;
+        let empty_table = vec![0u8; std::mem::size_of::<DomainTable>()];
+        new_file.write_all(&empty_table)?;
+
         drop(original);
         drop(new_file);
 
@@ -560,6 +565,246 @@ impl BinaryStorageManager {
     }
 }
 
+// Domain table marker for binary layout
+const DOMAIN_TABLE_START_MARKER: &[u8] = b"__DOMAIN_TABLE_START__";
+
+// Domain slot entry (66 bytes total)
+#[derive(Clone, Copy)]
+struct DomainSlot {
+    domain_hash: [u8; 64],  // Geometric hash of domain name
+    counter: u16,            // Password version counter (0-65535)
+}
+
+impl DomainSlot {
+    const EMPTY: Self = DomainSlot {
+        domain_hash: [0u8; 64],
+        counter: 0,
+    };
+
+    fn is_empty(&self) -> bool {
+        self.domain_hash == [0u8; 64]
+    }
+}
+
+// Domain table (512 slots = 33,792 bytes)
+struct DomainTable {
+    slots: [DomainSlot; 512],
+}
+
+impl DomainTable {
+    const fn new() -> Self {
+        DomainTable {
+            slots: [DomainSlot::EMPTY; 512],
+        }
+    }
+
+    // Find slot index for a domain hash
+    fn find_slot_by_hash(hash: &[u8; 64]) -> Option<usize> {
+        unsafe {
+            let table = &*std::ptr::addr_of!(DOMAIN_TABLE);
+            table.slots.iter().position(|slot| {
+                !slot.is_empty() && slot.domain_hash == *hash
+            })
+        }
+    }
+
+    // Get counter for domain
+    // Returns None if domain not in table
+    fn get_counter(domain: &str, structure: &mut StructureSystem) -> Option<u16> {
+        let hash = structure.hash_domain(domain);
+
+        Self::find_slot_by_hash(&hash).map(|idx| unsafe {
+            DOMAIN_TABLE.slots[idx].counter
+        })
+    }
+
+    // Set counter for domain
+    // Creates new entry if domain doesn't exist
+    // Returns error if table is full (all 512 slots used)
+    fn set_counter(
+        domain: &str,
+        counter: u16,
+        structure: &mut StructureSystem
+    ) -> Result<(), &'static str> {
+        let hash = structure.hash_domain(domain);
+
+        unsafe {
+            // Try to find existing slot
+            if let Some(idx) = Self::find_slot_by_hash(&hash) {
+                let table = &mut *std::ptr::addr_of_mut!(DOMAIN_TABLE);
+                table.slots[idx].counter = counter;
+                return Ok(());
+            }
+
+            // Find first empty slot
+            let table = &*std::ptr::addr_of!(DOMAIN_TABLE);
+            if let Some(idx) = table.slots.iter().position(|s| s.is_empty()) {
+                let table = &mut *std::ptr::addr_of_mut!(DOMAIN_TABLE);
+                table.slots[idx] = DomainSlot {
+                    domain_hash: hash,
+                    counter,
+                };
+                Ok(())
+            } else {
+                Err("Domain table full (512 slots)")
+            }
+        }
+    }
+
+    // Increment counter for domain
+    // Creates entry with counter=1 if domain is new
+    fn increment_counter(
+        domain: &str,
+        structure: &mut StructureSystem
+    ) -> Result<u16, &'static str> {
+        let current = Self::get_counter(domain, structure).unwrap_or(0);
+        let new_counter = current.saturating_add(1);
+        Self::set_counter(domain, new_counter, structure)?;
+        Ok(new_counter)
+    }
+
+    // Save domain table to binary file (parent/child process safe)
+    fn save_to_binary(path: &std::path::Path) -> io::Result<()> {
+        // Read original binary
+        let mut file = File::open(path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+        drop(file);
+
+        // Find domain table marker (backward search)
+        let mut marker_pos = None;
+        let search_start = if buffer.len() > 10 * 1024 * 1024 {
+            buffer.len() - 10 * 1024 * 1024
+        } else {
+            0
+        };
+
+        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev() {
+            if &buffer[i..i + DOMAIN_TABLE_START_MARKER.len()] == DOMAIN_TABLE_START_MARKER {
+                marker_pos = Some(i);
+                break;
+            }
+        }
+
+        let marker_pos = marker_pos.ok_or_else(|| {
+            io::Error::new(io::ErrorKind::NotFound, "Domain table marker not found")
+        })?;
+
+        let table_offset = marker_pos + DOMAIN_TABLE_START_MARKER.len();
+        let table_size = std::mem::size_of::<DomainTable>();
+
+        // Update domain table in buffer
+        unsafe {
+            let table_bytes = std::slice::from_raw_parts(
+                std::ptr::addr_of!(DOMAIN_TABLE) as *const u8,
+                table_size,
+            );
+            buffer[table_offset..table_offset + table_size].copy_from_slice(table_bytes);
+        }
+
+        // Write to new file
+        let temp_path = path.with_extension("new");
+        let mut new_file = File::create(&temp_path)?;
+        new_file.write_all(&buffer)?;
+        drop(new_file);
+
+        // Preserve permissions
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            let metadata = fs::metadata(path)?;
+            let mode = metadata.permissions().mode();
+            let mut perms = fs::metadata(&temp_path)?.permissions();
+            perms.set_mode(mode);
+            fs::set_permissions(&temp_path, perms)?;
+        }
+
+        // Atomic replace
+        let backup_path = path.with_extension("bak");
+        fs::rename(path, &backup_path)?;
+        fs::rename(&temp_path, path)?;
+
+        Ok(())
+    }
+
+    // Load domain table from binary file
+    fn load_from_binary(path: &std::path::Path) -> io::Result<()> {
+        // Find domain table offset
+        let mut file = File::open(path)?;
+        let mut buffer = Vec::new();
+        file.read_to_end(&mut buffer)?;
+
+        // Search for the LAST occurrence of the marker (to avoid finding the const in code section)
+        // Search from end backwards
+        let mut marker_pos = None;
+        let search_start = if buffer.len() > 10 * 1024 * 1024 {
+            buffer.len() - 10 * 1024 * 1024  // Search last 10MB
+        } else {
+            0
+        };
+
+        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev() {
+            if &buffer[i..i + DOMAIN_TABLE_START_MARKER.len()] == DOMAIN_TABLE_START_MARKER {
+                marker_pos = Some(i);
+                break;
+            }
+        }
+
+        if let Some(marker_pos) = marker_pos {
+            let table_size = std::mem::size_of::<DomainTable>();
+
+            // Check if there's enough data after marker
+            if buffer.len() >= marker_pos + DOMAIN_TABLE_START_MARKER.len() + table_size {
+                let table_data = &buffer[
+                    marker_pos + DOMAIN_TABLE_START_MARKER.len()..
+                    marker_pos + DOMAIN_TABLE_START_MARKER.len() + table_size
+                ];
+
+                unsafe {
+                    // Copy data into static
+                    std::ptr::copy_nonoverlapping(
+                        table_data.as_ptr(),
+                        std::ptr::addr_of_mut!(DOMAIN_TABLE) as *mut u8,
+                        table_size,
+                    );
+                }
+            }
+            // If not enough data, table remains as all zeros (default)
+        }
+        // If marker not found, table remains as all zeros (first run)
+
+        Ok(())
+    }
+}
+
+// Session state for active domain
+struct SessionState {
+    active_domain_hash: Option<[u8; 64]>,
+    saved_counter: u16,
+    active_counter: u16,
+    is_preview_mode: bool,
+    initialized: bool,
+}
+
+impl SessionState {
+    const fn empty() -> Self {
+        SessionState {
+            active_domain_hash: None,
+            saved_counter: 0,
+            active_counter: 0,
+            is_preview_mode: false,
+            initialized: false,
+        }
+    }
+}
+
+// Global mutable statics for domain management
+#[allow(static_mut_refs)]
+static mut DOMAIN_TABLE: DomainTable = DomainTable::new();
+
+#[allow(static_mut_refs)]
+static mut SESSION: SessionState = SessionState::empty();
+
 #[derive(Debug, Clone, Hash, PartialEq, Eq)]
 struct StructurePoint {
     coordinates: Vec<i32>,
@@ -817,6 +1062,65 @@ impl StructureSystem {
         };
 
         self.character_set[final_index]
+    }
+
+    // Hash a domain name using geometric structure
+    // Returns deterministic 64-byte identifier
+    fn hash_domain(&mut self, domain: &str) -> [u8; 64] {
+        // Save current state to restore later
+        let saved_position = self.current_position.clone();
+        let saved_seed = self.original_seed;
+        let saved_memory = self.accumulated_path_memory;
+
+        // Use fixed seed for domain hashing (deterministic across runs)
+        const DOMAIN_HASH_SEED: u64 = 0x444F4D41494E5F48; // "DOMAIN_H" in hex
+        self.original_seed = DOMAIN_HASH_SEED;
+        self.full_reset();
+
+        let mut hash_bytes = Vec::with_capacity(64);
+
+        // Feed domain through geometry character by character
+        for ch in domain.chars() {
+            let keycode = ch as u32;
+
+            // Transform through geometry (same as password generation!)
+            // extra_chars_count = 7 means 8 output codes per input char
+            let output_codes = self.transform_char(keycode, 7);
+
+            // Collapse each u32 output to single byte
+            for &code in &output_codes {
+                hash_bytes.push((code % 256) as u8);
+
+                if hash_bytes.len() >= 64 {
+                    break;
+                }
+            }
+
+            if hash_bytes.len() >= 64 {
+                break;
+            }
+        }
+
+        // Pad if domain was very short (e.g., "a.co")
+        while hash_bytes.len() < 64 {
+            let padding_codes = self.transform_char(0, 7);
+            for &code in &padding_codes {
+                hash_bytes.push((code % 256) as u8);
+                if hash_bytes.len() >= 64 {
+                    break;
+                }
+            }
+        }
+
+        // Restore original state (critical!)
+        self.original_seed = saved_seed;
+        self.current_position = saved_position;
+        self.accumulated_path_memory = saved_memory;
+
+        // Convert to fixed-size array
+        let mut result = [0u8; 64];
+        result.copy_from_slice(&hash_bytes[..64]);
+        result
     }
 
     fn to_bytes(&self) -> Vec<u8> {
@@ -2241,7 +2545,15 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                     _ => {
                         if let Some(ch) = char::from_u32(byte as u32) {
                             if !ch.is_control() {
-                                let keycode = ch as u32;
+                                let mut keycode = ch as u32;
+
+                                // Apply domain counter salt if session is active
+                                unsafe {
+                                    if SESSION.initialized {
+                                        keycode = keycode.wrapping_add(SESSION.active_counter as u32);
+                                    }
+                                }
+
                                 let saved_password =
                                     &mut password_manager.saved_passwords[saved_password_idx];
 
@@ -2379,7 +2691,14 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
 
     for i in 0..input_chars.len() {
-        let keycode = input_chars[i];
+        let mut keycode = input_chars[i];
+
+        // Apply domain counter salt if session is active
+        unsafe {
+            if SESSION.initialized {
+                keycode = keycode.wrapping_add(SESSION.active_counter as u32);
+            }
+        }
 
         // Offset keycode by sum of all feedbacks so far
         let feedback_offset: u32 = feedbacks.iter().map(|&fb| fb as u32).sum();
@@ -2421,6 +2740,32 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     Ok(())
 }
 
+// Helper function to extract a string value from JSON message
+fn extract_json_string(message: &str, key: &str) -> String {
+    let search = format!("\"{}\":\"", key);
+    if let Some(start) = message.find(&search) {
+        let start_idx = start + search.len();
+        if let Some(end) = message[start_idx..].find('"') {
+            return message[start_idx..start_idx + end].to_string();
+        }
+    }
+    String::new()
+}
+
+// Helper function to extract a number value from JSON message
+fn extract_json_number(message: &str, key: &str) -> u64 {
+    let search = format!("\"{}\":", key);
+    if let Some(start) = message.find(&search) {
+        let start_idx = start + search.len();
+        if let Some(end) = message[start_idx..].find(&[',', '}'][..]) {
+            if let Ok(val) = message[start_idx..start_idx + end].trim().parse() {
+                return val;
+            }
+        }
+    }
+    0
+}
+
 fn run_json_io_mode(args: &[String]) -> io::Result<()> {
     let mut account_name: Option<String> = None;
 
@@ -2435,6 +2780,12 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
     }
 
     let mut password_manager = PasswordManager::new(false, None, None, true)?;
+
+    // Load domain table from binary on startup
+    let exe_path = std::env::current_exe()?;
+    if let Err(e) = DomainTable::load_from_binary(&exe_path) {
+        eprintln!("Warning: Could not load domain table: {}", e);
+    }
 
     let saved_password_idx = if let Some(name) = &account_name {
         password_manager
@@ -2509,6 +2860,30 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
 
                 feedbacks.clear();
 
+                // Note: RESET only clears geometry and feedbacks, does NOT exit preview mode
+                // Preview mode state is preserved so user can retype with same counter
+
+                // Re-apply ghost navigation to return to domain+counter starting position
+                unsafe {
+                    if SESSION.initialized {
+                        if let Some(ref domain_hash) = SESSION.active_domain_hash {
+                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                            // Navigate using domain hash
+                            for i in 0..8 {
+                                let hash_byte = domain_hash[i] as u32;
+                                let _ = structure.transform_char(hash_byte, 0);
+                            }
+
+                            // Navigate using active counter (preserves preview mode counter!)
+                            let counter_u32 = SESSION.active_counter as u32;
+                            let _ = structure.transform_char(counter_u32, 0);
+                            let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
+                            let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
+                        }
+                    }
+                }
+
                 let response = "{\"status\":\"reset\"}";
                 let response_length = response.len() as u32;
                 stdout.write_all(&response_length.to_le_bytes())?;
@@ -2517,24 +2892,305 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 continue;
             } else if message.contains("\"FINALIZE\"") {
                 feedbacks.clear();
+                unsafe {
+                    SESSION.initialized = false;
+                    SESSION.active_domain_hash = None;
+                }
                 break;
+            } else if message.contains("\"GET_COUNTER\"") {
+                // Extract domain from message
+                let domain = extract_json_string(&message, "domain");
+
+                let response = if !domain.is_empty() {
+                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                    match DomainTable::get_counter(&domain, structure) {
+                        Some(counter) => format!("{{\"counter\":{}}}", counter),
+                        None => "{\"counter\":null}".to_string(),
+                    }
+                } else {
+                    "{\"error\":\"Missing domain\"}".to_string()
+                };
+
+                let response_length = response.len() as u32;
+                stdout.write_all(&response_length.to_le_bytes())?;
+                stdout.write_all(response.as_bytes())?;
+                stdout.flush()?;
+                continue;
+            } else if message.contains("\"ACTIVATE\"") && !message.contains("\"ACTIVATE_PREVIEW\"") {
+                // Extract domain
+                let domain = extract_json_string(&message, "domain");
+
+                if !domain.is_empty() {
+                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                    // Get or create counter
+                    let counter = match DomainTable::get_counter(&domain, structure) {
+                        Some(c) => c,
+                        None => {
+                            // First time on this domain - create entry with counter=0
+                            if let Err(e) = DomainTable::set_counter(&domain, 0, structure) {
+                                let response = format!("{{\"error\":\"{}\"}}", e);
+                                let response_length = response.len() as u32;
+                                stdout.write_all(&response_length.to_le_bytes())?;
+                                stdout.write_all(response.as_bytes())?;
+                                stdout.flush()?;
+                                continue;
+                            }
+                            if let Err(e) = DomainTable::save_to_binary(&exe_path) {
+                                eprintln!("Warning: Could not save domain table: {}", e);
+                            }
+                            0
+                        }
+                    };
+
+                    // Hash domain and store in session
+                    let domain_hash = structure.hash_domain(&domain);
+
+                    unsafe {
+                        SESSION.active_domain_hash = Some(domain_hash);
+                        SESSION.saved_counter = counter;
+                        SESSION.active_counter = counter;
+                        SESSION.is_preview_mode = false;
+                        SESSION.initialized = true;
+                    }
+
+                    structure.full_reset();
+                    feedbacks.clear();
+
+                    // Ghost navigation: Navigate through geometry using domain hash + counter
+                    // This ensures each domain+counter combination starts from a unique position
+                    // WITHOUT producing any output characters
+
+                    // Step 1: Navigate using domain hash bytes (8 bytes for uniqueness)
+                    for i in 0..8 {
+                        let hash_byte = domain_hash[i] as u32;
+                        // Transform through geometry but discard output
+                        let _ = structure.transform_char(hash_byte, 0);
+                    }
+
+                    // Step 2: Navigate using counter value
+                    // Use counter as both direct value and derived values for more entropy
+                    let counter_u32 = counter as u32;
+                    let _ = structure.transform_char(counter_u32, 0);
+                    let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
+                    let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
+
+                    // Now we're at a unique position in 7D space for this domain+counter
+                    // Subsequent user input will generate from this position
+
+                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"status\":\"ready\"}}", counter, counter);
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                } else {
+                    let response = "{\"error\":\"Missing domain\"}";
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                }
+                continue;
+            } else if message.contains("\"ACTIVATE_PREVIEW\"") {
+                let domain = extract_json_string(&message, "domain");
+
+                if !domain.is_empty() {
+                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                    let saved_counter = DomainTable::get_counter(&domain, structure).unwrap_or(0);
+                    let preview_counter = saved_counter.saturating_add(1);
+
+                    let domain_hash = structure.hash_domain(&domain);
+
+                    unsafe {
+                        SESSION.active_domain_hash = Some(domain_hash);
+                        SESSION.saved_counter = saved_counter;
+                        SESSION.active_counter = preview_counter;
+                        SESSION.is_preview_mode = true;
+                        SESSION.initialized = true;
+                    }
+
+                    structure.full_reset();
+                    feedbacks.clear();
+
+                    // Ghost navigation: Navigate through geometry using domain hash + counter
+                    // Use preview_counter to start from different position than saved version
+                    for i in 0..8 {
+                        let hash_byte = domain_hash[i] as u32;
+                        let _ = structure.transform_char(hash_byte, 0);
+                    }
+
+                    let counter_u32 = preview_counter as u32;
+                    let _ = structure.transform_char(counter_u32, 0);
+                    let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
+                    let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
+
+                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"status\":\"preview\"}}", saved_counter, preview_counter);
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                } else {
+                    let response = "{\"error\":\"Missing domain\"}";
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                }
+                continue;
+            } else if message.contains("\"SET_COUNTER\"") {
+                let domain = extract_json_string(&message, "domain");
+                let counter = extract_json_number(&message, "counter");
+
+                if !domain.is_empty() {
+                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                    match DomainTable::set_counter(&domain, counter as u16, structure) {
+                        Ok(()) => {
+                            if let Err(e) = DomainTable::save_to_binary(&exe_path) {
+                                eprintln!("Warning: Could not save domain table: {}", e);
+                            }
+
+                            // Update session if this is the active domain
+                            let domain_hash = structure.hash_domain(&domain);
+                            unsafe {
+                                let session = &*std::ptr::addr_of!(SESSION);
+                                if session.active_domain_hash.as_ref() == Some(&domain_hash) {
+                                    let session = &mut *std::ptr::addr_of_mut!(SESSION);
+                                    session.saved_counter = counter as u16;
+                                    session.active_counter = counter as u16;
+                                    session.is_preview_mode = false;
+                                    structure.full_reset();
+                                    feedbacks.clear();
+                                }
+                            }
+
+                            let response = "{\"status\":\"success\"}";
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                        Err(e) => {
+                            let response = format!("{{\"error\":\"{}\"}}", e);
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                    }
+                } else {
+                    let response = "{\"error\":\"Missing domain\"}";
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                }
+                continue;
+            } else if message.contains("\"COMMIT_INCREMENT\"") {
+                let domain = extract_json_string(&message, "domain");
+
+                if !domain.is_empty() {
+                    unsafe {
+                        if SESSION.is_preview_mode {
+                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                            if let Err(e) = DomainTable::set_counter(&domain, SESSION.active_counter, structure) {
+                                let response = format!("{{\"error\":\"{}\"}}", e);
+                                let response_length = response.len() as u32;
+                                stdout.write_all(&response_length.to_le_bytes())?;
+                                stdout.write_all(response.as_bytes())?;
+                                stdout.flush()?;
+                                continue;
+                            }
+
+                            if let Err(e) = DomainTable::save_to_binary(&exe_path) {
+                                eprintln!("Warning: Could not save domain table: {}", e);
+                            }
+
+                            let session = &mut *std::ptr::addr_of_mut!(SESSION);
+                            let active = session.active_counter;
+                            session.saved_counter = active;
+                            session.is_preview_mode = false;
+
+                            let response = format!("{{\"counter\":{},\"status\":\"committed\"}}", active);
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        } else {
+                            let response = "{\"error\":\"Not in preview mode\"}";
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                    }
+                } else {
+                    let response = "{\"error\":\"Missing domain\"}";
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                }
+                continue;
+            } else if message.contains("\"CANCEL_PREVIEW\"") {
+                unsafe {
+                    let session = &mut *std::ptr::addr_of_mut!(SESSION);
+                    if session.is_preview_mode {
+                        let saved = session.saved_counter;
+                        session.active_counter = saved;
+                        session.is_preview_mode = false;
+
+                        password_manager.saved_passwords[saved_password_idx]
+                            .structure_system
+                            .full_reset();
+                        feedbacks.clear();
+
+                        // Re-apply ghost navigation to return to domain+saved_counter position
+                        // This ensures we're at the correct starting point after cancelling preview
+                        if let Some(ref domain_hash) = SESSION.active_domain_hash {
+                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                            // Navigate using domain hash
+                            for i in 0..8 {
+                                let hash_byte = domain_hash[i] as u32;
+                                let _ = structure.transform_char(hash_byte, 0);
+                            }
+
+                            // Navigate using saved counter (NOT preview counter)
+                            let counter_u32 = saved as u32;
+                            let _ = structure.transform_char(counter_u32, 0);
+                            let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
+                            let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
+                        }
+
+                        let response = format!("{{\"counter\":{},\"status\":\"cancelled\"}}", saved);
+                        let response_length = response.len() as u32;
+                        stdout.write_all(&response_length.to_le_bytes())?;
+                        stdout.write_all(response.as_bytes())?;
+                        stdout.flush()?;
+                    } else {
+                        let response = "{\"error\":\"Not in preview mode\"}";
+                        let response_length = response.len() as u32;
+                        stdout.write_all(&response_length.to_le_bytes())?;
+                        stdout.write_all(response.as_bytes())?;
+                        stdout.flush()?;
+                    }
+                }
+                continue;
             }
         }
 
-        let char_value = if let Some(start) = message.find("\"char\":\"") {
-            let start_idx = start + 8;
-            if let Some(end) = message[start_idx..].find('"') {
-                let char_str = &message[start_idx..start_idx + end];
-                char_str.chars().next()
-            } else {
-                None
-            }
-        } else {
-            None
-        };
+        // Extract character code from JSON message
+        let keycode = extract_json_number(&message, "charCode") as u32;
 
-        if let Some(input_char) = char_value {
-            let keycode = input_char as u32;
+        if keycode > 0 {
+
+            // Note: Domain + counter salting now handled via ghost navigation
+            // at ACTIVATE time, which positions us uniquely in 7D space.
+            // No need to add counter here - the position itself provides uniqueness.
+
             let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
 
             // Offset keycode by sum of all feedbacks
@@ -2595,6 +3251,122 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
 
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
+
+    // Domain management CLI commands
+    if args.len() > 1 && args[1] == "--list-domains" {
+        let exe_path = std::env::current_exe()?;
+        DomainTable::load_from_binary(&exe_path)?;
+
+        let mut count = 0;
+        unsafe {
+            println!("Registered domains (hashes only - domain names cannot be reversed):\n");
+            let table = &*std::ptr::addr_of!(DOMAIN_TABLE);
+            for (i, slot) in table.slots.iter().enumerate() {
+                if !slot.is_empty() {
+                    let hex: String = slot.domain_hash[..16]
+                        .iter()
+                        .map(|b| format!("{:02x}", b))
+                        .collect();
+                    println!("Slot {}: {}... → v{}", i, hex, slot.counter);
+                    count += 1;
+                }
+            }
+        }
+        println!("\nTotal: {} domains registered", count);
+        return Ok(());
+    } else if args.len() > 2 && args[1] == "--get-counter" {
+        let domain = &args[2];
+        let exe_path = std::env::current_exe()?;
+        DomainTable::load_from_binary(&exe_path)?;
+
+        let mut password_manager = PasswordManager::new(false, None, None, true)?;
+        if password_manager.saved_passwords.is_empty() {
+            eprintln!("Error: No geometry found. Please create one first.");
+            return Ok(());
+        }
+
+        let structure = &mut password_manager.saved_passwords[0].structure_system;
+
+        match DomainTable::get_counter(domain, structure) {
+            Some(c) => println!("{}: v{}", domain, c),
+            None => println!("{}: not found", domain),
+        }
+        return Ok(());
+    } else if args.len() > 3 && args[1] == "--set-counter" {
+        let domain = &args[2];
+        let counter: u16 = args[3].parse()
+            .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Counter must be 0-65535"))?;
+
+        let exe_path = std::env::current_exe()?;
+        DomainTable::load_from_binary(&exe_path)?;
+
+        let mut password_manager = PasswordManager::new(false, None, None, true)?;
+        if password_manager.saved_passwords.is_empty() {
+            eprintln!("Error: No geometry found. Please create one first.");
+            return Ok(());
+        }
+
+        let structure = &mut password_manager.saved_passwords[0].structure_system;
+
+        DomainTable::set_counter(domain, counter, structure)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        DomainTable::save_to_binary(&exe_path)?;
+
+        println!("Set {} to v{}", domain, counter);
+        return Ok(());
+    } else if args.len() > 2 && args[1] == "--increment-counter" {
+        let domain = &args[2];
+        let exe_path = std::env::current_exe()?;
+        DomainTable::load_from_binary(&exe_path)?;
+
+        let mut password_manager = PasswordManager::new(false, None, None, true)?;
+        if password_manager.saved_passwords.is_empty() {
+            eprintln!("Error: No geometry found. Please create one first.");
+            return Ok(());
+        }
+
+        let structure = &mut password_manager.saved_passwords[0].structure_system;
+
+        let new_counter = DomainTable::increment_counter(domain, structure)
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        DomainTable::save_to_binary(&exe_path)?;
+
+        println!("{}: v{}", domain, new_counter);
+        return Ok(());
+    }
+
+    // Check for --use-domain-counter flag and initialize session if present
+    if let Some(domain_counter_pos) = args.iter().position(|arg| arg == "--use-domain-counter") {
+        if args.len() > domain_counter_pos + 1 {
+            let domain = &args[domain_counter_pos + 1];
+            let exe_path = std::env::current_exe()?;
+            DomainTable::load_from_binary(&exe_path)?;
+
+            let mut password_manager = PasswordManager::new(false, None, None, true)?;
+            if password_manager.saved_passwords.is_empty() {
+                eprintln!("Error: No geometry found. Please create one first.");
+                return Ok(());
+            }
+
+            let structure = &mut password_manager.saved_passwords[0].structure_system;
+            let counter = DomainTable::get_counter(domain, structure).unwrap_or(0);
+            let domain_hash = structure.hash_domain(domain);
+
+            unsafe {
+                let session = &mut *std::ptr::addr_of_mut!(SESSION);
+                session.active_domain_hash = Some(domain_hash);
+                session.saved_counter = counter;
+                session.active_counter = counter;
+                session.is_preview_mode = false;
+                session.initialized = true;
+            }
+
+            eprintln!("Using domain counter for '{}': v{}", domain, counter);
+        } else {
+            eprintln!("Error: --use-domain-counter requires a domain name");
+            return Ok(());
+        }
+    }
 
     if args.len() > 1 && args[1] == "--child-process" {
         run_child_process()?;
