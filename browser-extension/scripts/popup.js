@@ -13,9 +13,32 @@
 //
 // You should have received a copy of the GNU Affero General Public License
 // along with this program. If not, see <https://www.gnu.org/licenses/>.
-// 
+//
 // Alternative commercial licensing: Maui_The_Magnificent@proton.me
 
+function bitfieldToAllowedChars(bitfield) {
+  const allowedChars = [];
+  if (bitfield & 0b00000001) allowedChars.push('lowercase');
+  if (bitfield & 0b00000010) allowedChars.push('uppercase');
+  if (bitfield & 0b00000100) allowedChars.push('digits');
+  if (bitfield & 0b00001000) allowedChars.push('basicSymbols');
+  if (bitfield & 0b00010000) allowedChars.push('extendedSymbols');
+  if (bitfield & 0b00100000) allowedChars.push('emojis');
+  if (bitfield & 0b01000000) allowedChars.push('extendedUnicode');
+  return allowedChars;
+}
+
+function allowedCharsToBitfield(allowedChars) {
+  let bitfield = 0;
+  if (allowedChars.includes('lowercase')) bitfield |= 0b00000001;
+  if (allowedChars.includes('uppercase')) bitfield |= 0b00000010;
+  if (allowedChars.includes('digits')) bitfield |= 0b00000100;
+  if (allowedChars.includes('basicSymbols')) bitfield |= 0b00001000;
+  if (allowedChars.includes('extendedSymbols')) bitfield |= 0b00010000;
+  if (allowedChars.includes('emojis')) bitfield |= 0b00100000;
+  if (allowedChars.includes('extendedUnicode')) bitfield |= 0b01000000;
+  return bitfield;
+}
 
 let currentDomain = '';
 
@@ -102,39 +125,67 @@ function loadRules() {
     const rules = allRules[currentDomain];
 
     if (rules && rules.enabled) {
-      document.getElementById('enableRules').checked = true;
-      document.getElementById('rulesForm').style.display = 'block';
-
-      if (rules.minLength) {
-        document.getElementById('minLength').value = rules.minLength;
-      }
-      if (rules.maxLength) {
-        document.getElementById('maxLength').value = rules.maxLength;
-      }
-
-      const allowed = rules.allowedChars || ['lowercase', 'uppercase', 'digits', 'basicSymbols', 'extendedSymbols', 'emojis', 'extendedUnicode'];
-      document.getElementById('allowLowercase').checked = allowed.includes('lowercase');
-      document.getElementById('allowUppercase').checked = allowed.includes('uppercase');
-      document.getElementById('allowDigits').checked = allowed.includes('digits');
-      document.getElementById('allowBasicSymbols').checked = allowed.includes('basicSymbols');
-      document.getElementById('allowExtendedSymbols').checked = allowed.includes('extendedSymbols');
-      document.getElementById('allowEmojis').checked = allowed.includes('emojis');
-      document.getElementById('allowExtendedUnicode').checked = allowed.includes('extendedUnicode');
+      displayRules(rules);
     } else {
-      // Reset form
-      document.getElementById('enableRules').checked = false;
-      document.getElementById('rulesForm').style.display = 'none';
-      document.getElementById('minLength').value = '';
-      document.getElementById('maxLength').value = '';
-      document.getElementById('allowLowercase').checked = true;
-      document.getElementById('allowUppercase').checked = true;
-      document.getElementById('allowDigits').checked = true;
-      document.getElementById('allowBasicSymbols').checked = true;
-      document.getElementById('allowExtendedSymbols').checked = true;
-      document.getElementById('allowEmojis').checked = true;
-      document.getElementById('allowExtendedUnicode').checked = true;
+      chrome.runtime.sendMessage({
+        type: 'GET_RULES',
+        domain: currentDomain
+      }, (response) => {
+        if (response && response.maxLength !== undefined && response.charTypes !== undefined) {
+          if (response.maxLength !== 0 || response.charTypes !== 127) {
+            const rules = {
+              enabled: true,
+              maxLength: response.maxLength || null,
+              allowedChars: bitfieldToAllowedChars(response.charTypes)
+            };
+            displayRules(rules);
+
+            allRules[currentDomain] = rules;
+            chrome.storage.local.set({ domainRules: allRules });
+          } else {
+            displayRules(null);
+          }
+        } else {
+          displayRules(null);
+        }
+      });
     }
   });
+}
+
+function displayRules(rules) {
+  if (rules && rules.enabled) {
+    document.getElementById('enableRules').checked = true;
+    document.getElementById('rulesForm').style.display = 'block';
+
+    if (rules.minLength) {
+      document.getElementById('minLength').value = rules.minLength;
+    }
+    if (rules.maxLength) {
+      document.getElementById('maxLength').value = rules.maxLength;
+    }
+
+    const allowed = rules.allowedChars || ['lowercase', 'uppercase', 'digits', 'basicSymbols', 'extendedSymbols', 'emojis', 'extendedUnicode'];
+    document.getElementById('allowLowercase').checked = allowed.includes('lowercase');
+    document.getElementById('allowUppercase').checked = allowed.includes('uppercase');
+    document.getElementById('allowDigits').checked = allowed.includes('digits');
+    document.getElementById('allowBasicSymbols').checked = allowed.includes('basicSymbols');
+    document.getElementById('allowExtendedSymbols').checked = allowed.includes('extendedSymbols');
+    document.getElementById('allowEmojis').checked = allowed.includes('emojis');
+    document.getElementById('allowExtendedUnicode').checked = allowed.includes('extendedUnicode');
+  } else {
+    document.getElementById('enableRules').checked = false;
+    document.getElementById('rulesForm').style.display = 'none';
+    document.getElementById('minLength').value = '';
+    document.getElementById('maxLength').value = '';
+    document.getElementById('allowLowercase').checked = true;
+    document.getElementById('allowUppercase').checked = true;
+    document.getElementById('allowDigits').checked = true;
+    document.getElementById('allowBasicSymbols').checked = true;
+    document.getElementById('allowExtendedSymbols').checked = true;
+    document.getElementById('allowEmojis').checked = true;
+    document.getElementById('allowExtendedUnicode').checked = true;
+  }
 }
 
 document.getElementById('saveButton').addEventListener('click', () => {
@@ -174,35 +225,42 @@ document.getElementById('saveButton').addEventListener('click', () => {
     allowedChars: allowedChars
   };
 
-  chrome.storage.local.get(['domainRules'], (result) => {
-    const allRules = result.domainRules || {};
-    allRules[currentDomain] = rules;
+  const maxLengthValue = maxLength ? parseInt(maxLength) : 0;
+  const charTypesValue = allowedCharsToBitfield(allowedChars);
 
-    chrome.storage.local.set({ domainRules: allRules }, () => {
-      chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
-        if (tabs[0]) {
-          chrome.tabs.sendMessage(tabs[0].id, {
-            type: 'RULES_UPDATED',
-            domain: currentDomain,
-            rules: rules
-          }, () => {
-            chrome.runtime.lastError;
-          });
-        }
+  chrome.runtime.sendMessage({
+    type: 'SET_RULES',
+    domain: currentDomain,
+    maxLength: maxLengthValue,
+    charTypes: charTypesValue
+  }, (response) => {
+    if (chrome.runtime.lastError) {
+      showStatus('Error saving to binary: ' + chrome.runtime.lastError.message, 'error');
+      return;
+    }
+
+    chrome.storage.local.get(['domainRules'], (result) => {
+      const allRules = result.domainRules || {};
+      allRules[currentDomain] = rules;
+
+      chrome.storage.local.set({ domainRules: allRules }, () => {
+        chrome.tabs.query({ active: true, currentWindow: true }, (tabs) => {
+          if (tabs[0]) {
+            chrome.tabs.sendMessage(tabs[0].id, {
+              type: 'RULES_UPDATED',
+              domain: currentDomain,
+              rules: rules
+            }, () => {
+              chrome.runtime.lastError;
+            });
+          }
+        });
+
+        showStatus('Rules saved!', 'success');
+        setTimeout(() => {
+          window.close();
+        }, 500);
       });
-
-      chrome.runtime.sendMessage({
-        type: 'RULES_UPDATED',
-        domain: currentDomain,
-        rules: rules
-      }, () => {
-        chrome.runtime.lastError;
-      });
-
-      showStatus('Rules saved!', 'success');
-      setTimeout(() => {
-        window.close();
-      }, 500);
     });
   });
 });

@@ -127,6 +127,97 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       }
       break;
 
+    case 'GET_RULES':
+      // GET_RULES queries the binary for current rules for a domain
+      try {
+        const tempPort = chrome.runtime.connectNative('com.starwell.void_vault');
+
+        let responded = false;
+        const timeoutId = setTimeout(() => {
+          if (!responded) {
+            responded = true;
+            tempPort.disconnect();
+            sendResponse({error: 'Timeout'});
+          }
+        }, 5000);
+
+        tempPort.onMessage.addListener((msg) => {
+          if (!responded && msg.status === 'ready') {
+            responded = true;
+            clearTimeout(timeoutId);
+            tempPort.disconnect();
+
+            sendResponse({
+              maxLength: msg.max_length || 0,
+              charTypes: msg.char_types || 127
+            });
+          }
+        });
+
+        tempPort.onDisconnect.addListener(() => {
+          if (!responded) {
+            responded = true;
+            clearTimeout(timeoutId);
+            sendResponse({error: 'Connection lost'});
+          }
+        });
+
+        tempPort.postMessage({
+          type: 'ACTIVATE',
+          domain: message.domain
+        });
+      } catch (e) {
+        sendResponse({error: e.message});
+      }
+      break;
+
+    case 'SET_RULES':
+      try {
+        const tempPort = chrome.runtime.connectNative('com.starwell.void_vault');
+
+        let responded = false;
+        const timeoutId = setTimeout(() => {
+          if (!responded) {
+            responded = true;
+            tempPort.disconnect();
+            sendResponse({status: 'error', error: 'Timeout waiting for binary response'});
+          }
+        }, 5000);
+
+        tempPort.onMessage.addListener((msg) => {
+          if (!responded && (msg.status === 'success' || msg.error)) {
+            responded = true;
+            clearTimeout(timeoutId);
+            tempPort.disconnect();
+
+            if (msg.error) {
+              sendResponse({status: 'error', error: msg.error});
+            } else {
+              sendResponse({status: 'success'});
+            }
+          }
+        });
+
+        tempPort.onDisconnect.addListener(() => {
+          if (!responded) {
+            responded = true;
+            clearTimeout(timeoutId);
+            const error = chrome.runtime.lastError;
+            sendResponse({status: 'error', error: error ? error.message : 'Connection lost'});
+          }
+        });
+
+        tempPort.postMessage({
+          type: 'SET_RULES',
+          domain: message.domain,
+          max_length: message.maxLength || 0,
+          char_types: message.charTypes || 127
+        });
+      } catch (e) {
+        sendResponse({status: 'error', error: 'Failed to connect to binary: ' + e.message});
+      }
+      break;
+
     case 'OPEN_SETTINGS':
       chrome.action.openPopup();
       sendResponse({status: 'opened'});
@@ -162,6 +253,8 @@ function activateStarwell(tabId, domain) {
           type: 'COUNTER_UPDATED',
           savedCounter: message.saved_counter,
           activeCounter: message.active_counter,
+          maxLength: message.max_length || 0,
+          charTypes: message.char_types || 127,
           isPreviewMode: false
         });
       }
@@ -171,6 +264,8 @@ function activateStarwell(tabId, domain) {
           type: 'COUNTER_UPDATED',
           savedCounter: message.saved_counter,
           activeCounter: message.active_counter,
+          maxLength: message.max_length || 0,
+          charTypes: message.char_types || 127,
           isPreviewMode: true
         });
       }

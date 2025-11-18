@@ -16,6 +16,30 @@
 //
 // Alternative commercial licensing: Maui_The_Magnificent@proton.me
 
+function bitfieldToAllowedChars(bitfield) {
+  const allowedChars = [];
+  if (bitfield & 0b00000001) allowedChars.push('lowercase');
+  if (bitfield & 0b00000010) allowedChars.push('uppercase');
+  if (bitfield & 0b00000100) allowedChars.push('digits');
+  if (bitfield & 0b00001000) allowedChars.push('basicSymbols');
+  if (bitfield & 0b00010000) allowedChars.push('extendedSymbols');
+  if (bitfield & 0b00100000) allowedChars.push('emojis');
+  if (bitfield & 0b01000000) allowedChars.push('extendedUnicode');
+  return allowedChars;
+}
+
+function allowedCharsToBitfield(allowedChars) {
+  let bitfield = 0;
+  if (allowedChars.includes('lowercase')) bitfield |= 0b00000001;
+  if (allowedChars.includes('uppercase')) bitfield |= 0b00000010;
+  if (allowedChars.includes('digits')) bitfield |= 0b00000100;
+  if (allowedChars.includes('basicSymbols')) bitfield |= 0b00001000;
+  if (allowedChars.includes('extendedSymbols')) bitfield |= 0b00010000;
+  if (allowedChars.includes('emojis')) bitfield |= 0b00100000;
+  if (allowedChars.includes('extendedUnicode')) bitfield |= 0b01000000;
+  return bitfield;
+}
+
 let starwellActive = false;
 let currentPasswordField = null;
 let characterCount = 0;
@@ -1077,6 +1101,29 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     activeCounter = message.activeCounter;
     isPreviewMode = message.isPreviewMode;
 
+    if (message.maxLength !== undefined && message.charTypes !== undefined) {
+      const allowedChars = bitfieldToAllowedChars(message.charTypes);
+      const maxLength = message.maxLength;
+
+      chrome.storage.local.get(['domainRules'], (result) => {
+        const allRules = result.domainRules || {};
+
+        if (maxLength === 0 && message.charTypes === 127) {
+          if (allRules[currentDomain]) {
+            delete allRules[currentDomain];
+            chrome.storage.local.set({ domainRules: allRules });
+          }
+        } else {
+          allRules[currentDomain] = {
+            enabled: true,
+            maxLength: maxLength || null,
+            allowedChars: allowedChars
+          };
+          chrome.storage.local.set({ domainRules: allRules });
+        }
+      });
+    }
+
     if (currentPasswordField && !isPreviewMode) {
       const fieldContext = analyzePasswordField(currentPasswordField);
       if (fieldContext.isNewPassword || fieldContext.isPasswordReset) {
@@ -1108,7 +1155,7 @@ chrome.runtime.onMessage.addListener(async (message, sender, sendResponse) => {
     showNotification(`Counter saved to v${activeCounter} for ${currentDomain}`);
     updateOverlay();
   } else if (message.type === 'UPDATE_PASSWORD') {
-    if (currentPasswordField) {  // Removed starwellActive check - allow updates even when deactivated
+    if (currentPasswordField) {  
       let password = message.password;
 
       // Stupid NFC normalization for compatibility, killing my dreams
