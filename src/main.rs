@@ -568,17 +568,21 @@ impl BinaryStorageManager {
 // Domain table marker for binary layout
 const DOMAIN_TABLE_START_MARKER: &[u8] = b"__DOMAIN_TABLE_START__";
 
-// Domain slot entry (66 bytes total)
+// Domain slot entry (69 bytes total: 64 + 2 + 2 + 1)
 #[derive(Clone, Copy)]
 struct DomainSlot {
-    domain_hash: [u8; 64],  // Geometric hash of domain name
-    counter: u16,            // Password version counter (0-65535)
+    domain_hash: [u8; 64], // Geometric hash of domain name
+    counter: u16,          // Password version counter (0-65535)
+    max_length: u16,       // Maximum password length (0 = unlimited)
+    char_types: u8,        // Bit flags for allowed character types
 }
 
 impl DomainSlot {
     const EMPTY: Self = DomainSlot {
         domain_hash: [0u8; 64],
         counter: 0,
+        max_length: 0,
+        char_types: 127, // All 7 character types enabled by default
     };
 
     fn is_empty(&self) -> bool {
@@ -586,7 +590,6 @@ impl DomainSlot {
     }
 }
 
-// Domain table (512 slots = 33,792 bytes)
 struct DomainTable {
     slots: [DomainSlot; 512],
 }
@@ -602,34 +605,27 @@ impl DomainTable {
     fn find_slot_by_hash(hash: &[u8; 64]) -> Option<usize> {
         unsafe {
             let table = &*std::ptr::addr_of!(DOMAIN_TABLE);
-            table.slots.iter().position(|slot| {
-                !slot.is_empty() && slot.domain_hash == *hash
-            })
+            table
+                .slots
+                .iter()
+                .position(|slot| !slot.is_empty() && slot.domain_hash == *hash)
         }
     }
 
-    // Get counter for domain
-    // Returns None if domain not in table
     fn get_counter(domain: &str, structure: &mut StructureSystem) -> Option<u16> {
         let hash = structure.hash_domain(domain);
 
-        Self::find_slot_by_hash(&hash).map(|idx| unsafe {
-            DOMAIN_TABLE.slots[idx].counter
-        })
+        Self::find_slot_by_hash(&hash).map(|idx| unsafe { DOMAIN_TABLE.slots[idx].counter })
     }
 
-    // Set counter for domain
-    // Creates new entry if domain doesn't exist
-    // Returns error if table is full (all 512 slots used)
     fn set_counter(
         domain: &str,
         counter: u16,
-        structure: &mut StructureSystem
+        structure: &mut StructureSystem,
     ) -> Result<(), &'static str> {
         let hash = structure.hash_domain(domain);
 
         unsafe {
-            // Try to find existing slot
             if let Some(idx) = Self::find_slot_by_hash(&hash) {
                 let table = &mut *std::ptr::addr_of_mut!(DOMAIN_TABLE);
                 table.slots[idx].counter = counter;
@@ -643,6 +639,8 @@ impl DomainTable {
                 table.slots[idx] = DomainSlot {
                     domain_hash: hash,
                     counter,
+                    max_length: 0,   // 0 = unlimited, if you need to.
+                    char_types: 127, // Default: all types enabled
                 };
                 Ok(())
             } else {
@@ -651,11 +649,9 @@ impl DomainTable {
         }
     }
 
-    // Increment counter for domain
-    // Creates entry with counter=1 if domain is new
     fn increment_counter(
         domain: &str,
-        structure: &mut StructureSystem
+        structure: &mut StructureSystem,
     ) -> Result<u16, &'static str> {
         let current = Self::get_counter(domain, structure).unwrap_or(0);
         let new_counter = current.saturating_add(1);
@@ -663,15 +659,58 @@ impl DomainTable {
         Ok(new_counter)
     }
 
-    // Save domain table to binary file (parent/child process safe)
+    // get password rules for domain
+    fn get_rules(domain: &str, structure: &mut StructureSystem) -> Option<(u16, u8)> {
+        let hash = structure.hash_domain(domain);
+
+        Self::find_slot_by_hash(&hash).map(|idx| unsafe {
+            let slot = &DOMAIN_TABLE.slots[idx];
+            (slot.max_length, slot.char_types)
+        })
+    }
+
+    // Set password rules for domain
+    // Creates new entry if domain doesn't exist
+    // returns error if table is full (all 512 slots used. If this happens, rethink your life)
+    fn set_rules(
+        domain: &str,
+        max_length: u16,
+        char_types: u8,
+        structure: &mut StructureSystem,
+    ) -> Result<(), &'static str> {
+        let hash = structure.hash_domain(domain);
+
+        unsafe {
+            // Try to find existing slot
+            if let Some(idx) = Self::find_slot_by_hash(&hash) {
+                let table = &mut *std::ptr::addr_of_mut!(DOMAIN_TABLE);
+                table.slots[idx].max_length = max_length;
+                table.slots[idx].char_types = char_types;
+                return Ok(());
+            }
+
+            let table = &*std::ptr::addr_of!(DOMAIN_TABLE);
+            if let Some(idx) = table.slots.iter().position(|s| s.is_empty()) {
+                let table = &mut *std::ptr::addr_of_mut!(DOMAIN_TABLE);
+                table.slots[idx] = DomainSlot {
+                    domain_hash: hash,
+                    counter: 0, // New domain starts at counter 0
+                    max_length,
+                    char_types,
+                };
+                Ok(())
+            } else {
+                Err("Domain table full (512 slots)")
+            }
+        }
+    }
+
     fn save_to_binary(path: &std::path::Path) -> io::Result<()> {
-        // Read original binary
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
         drop(file);
 
-        // Find domain table marker (backward search)
         let mut marker_pos = None;
         let search_start = if buffer.len() > 10 * 1024 * 1024 {
             buffer.len() - 10 * 1024 * 1024
@@ -679,7 +718,8 @@ impl DomainTable {
             0
         };
 
-        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev() {
+        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev()
+        {
             if &buffer[i..i + DOMAIN_TABLE_START_MARKER.len()] == DOMAIN_TABLE_START_MARKER {
                 marker_pos = Some(i);
                 break;
@@ -693,7 +733,6 @@ impl DomainTable {
         let table_offset = marker_pos + DOMAIN_TABLE_START_MARKER.len();
         let table_size = std::mem::size_of::<DomainTable>();
 
-        // Update domain table in buffer
         unsafe {
             let table_bytes = std::slice::from_raw_parts(
                 std::ptr::addr_of!(DOMAIN_TABLE) as *const u8,
@@ -702,13 +741,11 @@ impl DomainTable {
             buffer[table_offset..table_offset + table_size].copy_from_slice(table_bytes);
         }
 
-        // Write to new file
         let temp_path = path.with_extension("new");
         let mut new_file = File::create(&temp_path)?;
         new_file.write_all(&buffer)?;
         drop(new_file);
 
-        // Preserve permissions
         #[cfg(unix)]
         {
             use std::os::unix::fs::PermissionsExt;
@@ -719,7 +756,6 @@ impl DomainTable {
             fs::set_permissions(&temp_path, perms)?;
         }
 
-        // Atomic replace
         let backup_path = path.with_extension("bak");
         fs::rename(path, &backup_path)?;
         fs::rename(&temp_path, path)?;
@@ -727,23 +763,20 @@ impl DomainTable {
         Ok(())
     }
 
-    // Load domain table from binary file
     fn load_from_binary(path: &std::path::Path) -> io::Result<()> {
-        // Find domain table offset
         let mut file = File::open(path)?;
         let mut buffer = Vec::new();
         file.read_to_end(&mut buffer)?;
 
-        // Search for the LAST occurrence of the marker (to avoid finding the const in code section)
-        // Search from end backwards
         let mut marker_pos = None;
         let search_start = if buffer.len() > 10 * 1024 * 1024 {
-            buffer.len() - 10 * 1024 * 1024  // Search last 10MB
+            buffer.len() - 10 * 1024 * 1024
         } else {
             0
         };
 
-        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev() {
+        for i in (search_start..buffer.len().saturating_sub(DOMAIN_TABLE_START_MARKER.len())).rev()
+        {
             if &buffer[i..i + DOMAIN_TABLE_START_MARKER.len()] == DOMAIN_TABLE_START_MARKER {
                 marker_pos = Some(i);
                 break;
@@ -753,15 +786,11 @@ impl DomainTable {
         if let Some(marker_pos) = marker_pos {
             let table_size = std::mem::size_of::<DomainTable>();
 
-            // Check if there's enough data after marker
             if buffer.len() >= marker_pos + DOMAIN_TABLE_START_MARKER.len() + table_size {
-                let table_data = &buffer[
-                    marker_pos + DOMAIN_TABLE_START_MARKER.len()..
-                    marker_pos + DOMAIN_TABLE_START_MARKER.len() + table_size
-                ];
+                let table_data = &buffer[marker_pos + DOMAIN_TABLE_START_MARKER.len()
+                    ..marker_pos + DOMAIN_TABLE_START_MARKER.len() + table_size];
 
                 unsafe {
-                    // Copy data into static
                     std::ptr::copy_nonoverlapping(
                         table_data.as_ptr(),
                         std::ptr::addr_of_mut!(DOMAIN_TABLE) as *mut u8,
@@ -769,15 +798,12 @@ impl DomainTable {
                     );
                 }
             }
-            // If not enough data, table remains as all zeros (default)
         }
-        // If marker not found, table remains as all zeros (first run)
 
         Ok(())
     }
 }
 
-// Session state for active domain
 struct SessionState {
     active_domain_hash: Option<[u8; 64]>,
     saved_counter: u16,
@@ -798,7 +824,6 @@ impl SessionState {
     }
 }
 
-// Global mutable statics for domain management
 #[allow(static_mut_refs)]
 static mut DOMAIN_TABLE: DomainTable = DomainTable::new();
 
@@ -1064,30 +1089,24 @@ impl StructureSystem {
         self.character_set[final_index]
     }
 
-    // Hash a domain name using geometric structure
+    // Scrambles domain name using geometric structure
     // Returns deterministic 64-byte identifier
     fn hash_domain(&mut self, domain: &str) -> [u8; 64] {
-        // Save current state to restore later
         let saved_position = self.current_position.clone();
         let saved_seed = self.original_seed;
         let saved_memory = self.accumulated_path_memory;
 
-        // Use fixed seed for domain hashing (deterministic across runs)
-        const DOMAIN_HASH_SEED: u64 = 0x444F4D41494E5F48; // "DOMAIN_H" in hex
+        const DOMAIN_HASH_SEED: u64 = 0x444F4D41494E5F48;
         self.original_seed = DOMAIN_HASH_SEED;
         self.full_reset();
 
         let mut hash_bytes = Vec::with_capacity(64);
 
-        // Feed domain through geometry character by character
         for ch in domain.chars() {
             let keycode = ch as u32;
 
-            // Transform through geometry (same as password generation!)
-            // extra_chars_count = 7 means 8 output codes per input char
             let output_codes = self.transform_char(keycode, 7);
 
-            // Collapse each u32 output to single byte
             for &code in &output_codes {
                 hash_bytes.push((code % 256) as u8);
 
@@ -1112,12 +1131,10 @@ impl StructureSystem {
             }
         }
 
-        // Restore original state (critical!)
         self.original_seed = saved_seed;
         self.current_position = saved_position;
         self.accumulated_path_memory = saved_memory;
 
-        // Convert to fixed-size array
         let mut result = [0u8; 64];
         result.copy_from_slice(&hash_bytes[..64]);
         result
@@ -1981,7 +1998,7 @@ impl PasswordManager {
     }
 }
 
-fn run_parent_process() -> io::Result<()> {
+fn run_parent_process(auto_exit: bool) -> io::Result<()> {
     println!("Starting Void Vault...");
     println!("Maximized and unending void");
     println!("Reapplied inside the geometry");
@@ -1991,7 +2008,10 @@ fn run_parent_process() -> io::Result<()> {
     let (_tx_to_parent, rx_from_child) = mpsc::channel();
 
     let executable_path = std::env::current_exe()?;
-    let child_args = vec!["--child-process".to_string()];
+    let mut child_args = vec!["--child-process".to_string()];
+    if auto_exit {
+        child_args.push("--auto-exit".to_string());
+    }
 
     let mut child = Command::new(&executable_path)
         .args(&child_args)
@@ -2063,7 +2083,11 @@ fn run_parent_process() -> io::Result<()> {
     Ok(())
 }
 
-fn run_simple_setup(password_manager: &mut PasswordManager, seed: u64) -> io::Result<()> {
+fn run_simple_setup(
+    password_manager: &mut PasswordManager,
+    seed: u64,
+    auto_exit: bool,
+) -> io::Result<()> {
     println!("");
     println!("╔════════════════════════════════════════════════════════════════════╗");
     println!("║                     WELCOME TO THE VOID VAULT                      ║");
@@ -2135,14 +2159,16 @@ fn run_simple_setup(password_manager: &mut PasswordManager, seed: u64) -> io::Re
     println!("⚠️  IMPORTANT: Backup this file to a safe place!");
     println!("    Without it, you cannot access your passwords.\n");
 
-    println!("Press Enter to continue...");
-    let mut cont = String::new();
-    io::stdin().read_line(&mut cont)?;
+    if !auto_exit {
+        println!("Press Enter to continue...");
+        let mut cont = String::new();
+        io::stdin().read_line(&mut cont)?;
+    }
 
     Ok(())
 }
 
-fn run_child_process() -> io::Result<()> {
+fn run_child_process(auto_exit: bool) -> io::Result<()> {
     println!("Starting the Void Vault");
 
     let (tx_to_parent, _rx_from_child) = mpsc::channel();
@@ -2191,16 +2217,20 @@ fn run_child_process() -> io::Result<()> {
     };
 
     if password_manager.active_structure_idx.is_some() {
-        run_interactive_mode(&mut password_manager)?;
+        if !auto_exit {
+            run_interactive_mode(&mut password_manager)?;
+        }
     } else if password_manager.saved_passwords.is_empty() {
-        if let Ok(_) = run_simple_setup(&mut password_manager, seed) {
-            if password_manager.active_structure_idx.is_some() {
+        if let Ok(_) = run_simple_setup(&mut password_manager, seed, auto_exit) {
+            if password_manager.active_structure_idx.is_some() && !auto_exit {
                 run_interactive_mode(&mut password_manager)?;
             }
         }
     } else {
         password_manager.active_structure_idx = Some(0);
-        run_interactive_mode(&mut password_manager)?;
+        if !auto_exit {
+            run_interactive_mode(&mut password_manager)?;
+        }
     }
 
     tx_to_parent
@@ -2547,10 +2577,10 @@ fn run_terminal_mode(args: &[String]) -> io::Result<()> {
                             if !ch.is_control() {
                                 let mut keycode = ch as u32;
 
-                                // Apply domain counter salt if session is active
                                 unsafe {
                                     if SESSION.initialized {
-                                        keycode = keycode.wrapping_add(SESSION.active_counter as u32);
+                                        keycode =
+                                            keycode.wrapping_add(SESSION.active_counter as u32);
                                     }
                                 }
 
@@ -2693,7 +2723,6 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     for i in 0..input_chars.len() {
         let mut keycode = input_chars[i];
 
-        // Apply domain counter salt if session is active
         unsafe {
             if SESSION.initialized {
                 keycode = keycode.wrapping_add(SESSION.active_counter as u32);
@@ -2740,7 +2769,6 @@ fn run_io_mode(args: &[String]) -> io::Result<()> {
     Ok(())
 }
 
-// Helper function to extract a string value from JSON message
 fn extract_json_string(message: &str, key: &str) -> String {
     let search = format!("\"{}\":\"", key);
     if let Some(start) = message.find(&search) {
@@ -2752,7 +2780,6 @@ fn extract_json_string(message: &str, key: &str) -> String {
     String::new()
 }
 
-// Helper function to extract a number value from JSON message
 fn extract_json_number(message: &str, key: &str) -> u64 {
     let search = format!("\"{}\":", key);
     if let Some(start) = message.find(&search) {
@@ -2863,19 +2890,18 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 // Note: RESET only clears geometry and feedbacks, does NOT exit preview mode
                 // Preview mode state is preserved so user can retype with same counter
 
-                // Re-apply ghost navigation to return to domain+counter starting position
                 unsafe {
                     if SESSION.initialized {
                         if let Some(ref domain_hash) = SESSION.active_domain_hash {
-                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                            let structure = &mut password_manager.saved_passwords
+                                [saved_password_idx]
+                                .structure_system;
 
-                            // Navigate using domain hash
                             for i in 0..8 {
                                 let hash_byte = domain_hash[i] as u32;
                                 let _ = structure.transform_char(hash_byte, 0);
                             }
 
-                            // Navigate using active counter (preserves preview mode counter!)
                             let counter_u32 = SESSION.active_counter as u32;
                             let _ = structure.transform_char(counter_u32, 0);
                             let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
@@ -2898,11 +2924,11 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 }
                 break;
             } else if message.contains("\"GET_COUNTER\"") {
-                // Extract domain from message
                 let domain = extract_json_string(&message, "domain");
 
                 let response = if !domain.is_empty() {
-                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                    let structure =
+                        &mut password_manager.saved_passwords[saved_password_idx].structure_system;
                     match DomainTable::get_counter(&domain, structure) {
                         Some(counter) => format!("{{\"counter\":{}}}", counter),
                         None => "{\"counter\":null}".to_string(),
@@ -2916,18 +2942,17 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 stdout.write_all(response.as_bytes())?;
                 stdout.flush()?;
                 continue;
-            } else if message.contains("\"ACTIVATE\"") && !message.contains("\"ACTIVATE_PREVIEW\"") {
-                // Extract domain
+            } else if message.contains("\"ACTIVATE\"") && !message.contains("\"ACTIVATE_PREVIEW\"")
+            {
                 let domain = extract_json_string(&message, "domain");
 
                 if !domain.is_empty() {
-                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                    let structure =
+                        &mut password_manager.saved_passwords[saved_password_idx].structure_system;
 
-                    // Get or create counter
                     let counter = match DomainTable::get_counter(&domain, structure) {
                         Some(c) => c,
                         None => {
-                            // First time on this domain - create entry with counter=0
                             if let Err(e) = DomainTable::set_counter(&domain, 0, structure) {
                                 let response = format!("{{\"error\":\"{}\"}}", e);
                                 let response_length = response.len() as u32;
@@ -2942,6 +2967,9 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                             0
                         }
                     };
+
+                    let (max_length, char_types) =
+                        DomainTable::get_rules(&domain, structure).unwrap_or((0, 127)); // Default: unlimited length, all types enabled
 
                     // Hash domain and store in session
                     let domain_hash = structure.hash_domain(&domain);
@@ -2961,14 +2989,11 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     // This ensures each domain+counter combination starts from a unique position
                     // WITHOUT producing any output characters
 
-                    // Step 1: Navigate using domain hash bytes (8 bytes for uniqueness)
                     for i in 0..8 {
                         let hash_byte = domain_hash[i] as u32;
-                        // Transform through geometry but discard output
                         let _ = structure.transform_char(hash_byte, 0);
                     }
 
-                    // Step 2: Navigate using counter value
                     // Use counter as both direct value and derived values for more entropy
                     let counter_u32 = counter as u32;
                     let _ = structure.transform_char(counter_u32, 0);
@@ -2978,7 +3003,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     // Now we're at a unique position in 7D space for this domain+counter
                     // Subsequent user input will generate from this position
 
-                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"status\":\"ready\"}}", counter, counter);
+                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"max_length\":{},\"char_types\":{},\"status\":\"ready\"}}", counter, counter, max_length, char_types);
                     let response_length = response.len() as u32;
                     stdout.write_all(&response_length.to_le_bytes())?;
                     stdout.write_all(response.as_bytes())?;
@@ -2995,10 +3020,14 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 let domain = extract_json_string(&message, "domain");
 
                 if !domain.is_empty() {
-                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                    let structure =
+                        &mut password_manager.saved_passwords[saved_password_idx].structure_system;
 
                     let saved_counter = DomainTable::get_counter(&domain, structure).unwrap_or(0);
                     let preview_counter = saved_counter.saturating_add(1);
+
+                    let (max_length, char_types) =
+                        DomainTable::get_rules(&domain, structure).unwrap_or((0, 127));
 
                     let domain_hash = structure.hash_domain(&domain);
 
@@ -3013,8 +3042,6 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     structure.full_reset();
                     feedbacks.clear();
 
-                    // Ghost navigation: Navigate through geometry using domain hash + counter
-                    // Use preview_counter to start from different position than saved version
                     for i in 0..8 {
                         let hash_byte = domain_hash[i] as u32;
                         let _ = structure.transform_char(hash_byte, 0);
@@ -3025,7 +3052,7 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
                     let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
 
-                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"status\":\"preview\"}}", saved_counter, preview_counter);
+                    let response = format!("{{\"saved_counter\":{},\"active_counter\":{},\"max_length\":{},\"char_types\":{},\"status\":\"preview\"}}", saved_counter, preview_counter, max_length, char_types);
                     let response_length = response.len() as u32;
                     stdout.write_all(&response_length.to_le_bytes())?;
                     stdout.write_all(response.as_bytes())?;
@@ -3043,7 +3070,8 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                 let counter = extract_json_number(&message, "counter");
 
                 if !domain.is_empty() {
-                    let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                    let structure =
+                        &mut password_manager.saved_passwords[saved_password_idx].structure_system;
 
                     match DomainTable::set_counter(&domain, counter as u16, structure) {
                         Ok(()) => {
@@ -3051,7 +3079,6 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                                 eprintln!("Warning: Could not save domain table: {}", e);
                             }
 
-                            // Update session if this is the active domain
                             let domain_hash = structure.hash_domain(&domain);
                             unsafe {
                                 let session = &*std::ptr::addr_of!(SESSION);
@@ -3087,15 +3114,56 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                     stdout.flush()?;
                 }
                 continue;
+            } else if message.contains("\"SET_RULES\"") {
+                let domain = extract_json_string(&message, "domain");
+                let max_length = extract_json_number(&message, "max_length") as u16;
+                let char_types = extract_json_number(&message, "char_types") as u8;
+
+                if !domain.is_empty() {
+                    let structure =
+                        &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+
+                    match DomainTable::set_rules(&domain, max_length, char_types, structure) {
+                        Ok(()) => {
+                            if let Err(e) = DomainTable::save_to_binary(&exe_path) {
+                                eprintln!("Warning: Could not save domain table: {}", e);
+                            }
+
+                            let response = "{\"status\":\"success\"}";
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                        Err(e) => {
+                            let response = format!("{{\"error\":\"{}\"}}", e);
+                            let response_length = response.len() as u32;
+                            stdout.write_all(&response_length.to_le_bytes())?;
+                            stdout.write_all(response.as_bytes())?;
+                            stdout.flush()?;
+                        }
+                    }
+                } else {
+                    let response = "{\"error\":\"Missing domain\"}";
+                    let response_length = response.len() as u32;
+                    stdout.write_all(&response_length.to_le_bytes())?;
+                    stdout.write_all(response.as_bytes())?;
+                    stdout.flush()?;
+                }
+                continue;
             } else if message.contains("\"COMMIT_INCREMENT\"") {
                 let domain = extract_json_string(&message, "domain");
 
                 if !domain.is_empty() {
                     unsafe {
                         if SESSION.is_preview_mode {
-                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                            let structure = &mut password_manager.saved_passwords
+                                [saved_password_idx]
+                                .structure_system;
 
-                            if let Err(e) = DomainTable::set_counter(&domain, SESSION.active_counter, structure) {
+                            if let Err(e) =
+                                DomainTable::set_counter(&domain, SESSION.active_counter, structure)
+                            {
                                 let response = format!("{{\"error\":\"{}\"}}", e);
                                 let response_length = response.len() as u32;
                                 stdout.write_all(&response_length.to_le_bytes())?;
@@ -3113,7 +3181,8 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                             session.saved_counter = active;
                             session.is_preview_mode = false;
 
-                            let response = format!("{{\"counter\":{},\"status\":\"committed\"}}", active);
+                            let response =
+                                format!("{{\"counter\":{},\"status\":\"committed\"}}", active);
                             let response_length = response.len() as u32;
                             stdout.write_all(&response_length.to_le_bytes())?;
                             stdout.write_all(response.as_bytes())?;
@@ -3147,25 +3216,24 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
                             .full_reset();
                         feedbacks.clear();
 
-                        // Re-apply ghost navigation to return to domain+saved_counter position
-                        // This ensures we're at the correct starting point after cancelling preview
                         if let Some(ref domain_hash) = SESSION.active_domain_hash {
-                            let structure = &mut password_manager.saved_passwords[saved_password_idx].structure_system;
+                            let structure = &mut password_manager.saved_passwords
+                                [saved_password_idx]
+                                .structure_system;
 
-                            // Navigate using domain hash
                             for i in 0..8 {
                                 let hash_byte = domain_hash[i] as u32;
                                 let _ = structure.transform_char(hash_byte, 0);
                             }
 
-                            // Navigate using saved counter (NOT preview counter)
                             let counter_u32 = saved as u32;
                             let _ = structure.transform_char(counter_u32, 0);
                             let _ = structure.transform_char(counter_u32.wrapping_mul(7), 0);
                             let _ = structure.transform_char(counter_u32.wrapping_add(13), 0);
                         }
 
-                        let response = format!("{{\"counter\":{},\"status\":\"cancelled\"}}", saved);
+                        let response =
+                            format!("{{\"counter\":{},\"status\":\"cancelled\"}}", saved);
                         let response_length = response.len() as u32;
                         stdout.write_all(&response_length.to_le_bytes())?;
                         stdout.write_all(response.as_bytes())?;
@@ -3182,15 +3250,9 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
             }
         }
 
-        // Extract character code from JSON message
         let keycode = extract_json_number(&message, "charCode") as u32;
 
         if keycode > 0 {
-
-            // Note: Domain + counter salting now handled via ghost navigation
-            // at ACTIVATE time, which positions us uniquely in 7D space.
-            // No need to add counter here - the position itself provides uniqueness.
-
             let saved_password = &mut password_manager.saved_passwords[saved_password_idx];
 
             // Offset keycode by sum of all feedbacks
@@ -3252,7 +3314,6 @@ fn run_json_io_mode(args: &[String]) -> io::Result<()> {
 fn main() -> io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
-    // Domain management CLI commands
     if args.len() > 1 && args[1] == "--list-domains" {
         let exe_path = std::env::current_exe()?;
         DomainTable::load_from_binary(&exe_path)?;
@@ -3294,7 +3355,8 @@ fn main() -> io::Result<()> {
         return Ok(());
     } else if args.len() > 3 && args[1] == "--set-counter" {
         let domain = &args[2];
-        let counter: u16 = args[3].parse()
+        let counter: u16 = args[3]
+            .parse()
             .map_err(|_| io::Error::new(io::ErrorKind::InvalidInput, "Counter must be 0-65535"))?;
 
         let exe_path = std::env::current_exe()?;
@@ -3335,7 +3397,6 @@ fn main() -> io::Result<()> {
         return Ok(());
     }
 
-    // Check for --use-domain-counter flag and initialize session if present
     if let Some(domain_counter_pos) = args.iter().position(|arg| arg == "--use-domain-counter") {
         if args.len() > domain_counter_pos + 1 {
             let domain = &args[domain_counter_pos + 1];
@@ -3368,8 +3429,10 @@ fn main() -> io::Result<()> {
         }
     }
 
+    let auto_exit = args.contains(&"--auto-exit".to_string());
+
     if args.len() > 1 && args[1] == "--child-process" {
-        run_child_process()?;
+        run_child_process(auto_exit)?;
     } else if args.len() > 1 && args[1] == "--term" {
         run_terminal_mode(&args)?;
     } else if args.len() > 1 && args[1] == "--io" {
@@ -3380,7 +3443,7 @@ fn main() -> io::Result<()> {
         // auto-detect browser native messaging (stdin is not a TTY)
         run_json_io_mode(&args)?;
     } else {
-        run_parent_process()?;
+        run_parent_process(auto_exit)?;
     }
 
     Ok(())
