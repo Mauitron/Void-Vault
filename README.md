@@ -360,19 +360,8 @@ See PRIVACY.md for full policy.
 ## Contributing
 
 ***If you like Void Vault and want to support the project, please consider feeding me some [Pizza](https://buymeacoffee.com/charon0) 🍕***
-## Zero storage. Zero trust. Zero compromise.
 
 Found a vulnerability or exploit? Please report it! This helps validate the security model.
-
----
-
-## About Starwell
-
-Void Vault is a component of a larger project called **Starwell** (TBA).
-This standalone version is released to:
-1. Make ultra-secure passwords accessible to vulnerable users (elderly, memory-impaired)
-2. Get community feedback and security auditing
-3. Validate the unique geometric approach
 
 ---
 
